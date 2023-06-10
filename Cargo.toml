@@ -13,8 +13,21 @@ name = "zero2prod"
 
 [dependencies]
 axum = { version = "0.6" }
-tokio = { version = "1", features = ["macros", "rt-multi-thread"]}
+tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
+serde = { version = "1", features = ["derive"] }
 hyper = { version = "0.14" }
 
+[dependencies.sqlx]
+version = "0.6"
+default-features = false
+features = [
+    "macros",
+    "postgres",
+    "uuid",
+    "chrono",
+    "migrate",
+    "runtime-tokio-rustls",
+]
+
 [dev-dependencies]
-reqwest ={ version = "0.11"}
+reqwest = { version = "0.11" }
