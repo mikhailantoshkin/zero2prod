@@ -1,8 +1,25 @@
 use std::time::Duration;
 
+use once_cell::sync::Lazy;
+use secrecy::ExposeSecret;
 use sqlx::{Connection, Executor, PgConnection, PgPool};
 use uuid::Uuid;
-use zero2prod::configuration::{get_config, DatabaseSettings};
+use zero2prod::{
+    configuration::{get_config, DatabaseSettings},
+    telemetry::{get_subscriber, init_subscriber},
+};
+
+static TRACING: Lazy<()> = Lazy::new(|| {
+    let default_filter_level = "info".into();
+    let subscriber_name = "test".into();
+    if std::env::var("TEST_LOG").is_ok() {
+        let subscriber = get_subscriber(subscriber_name, default_filter_level, std::io::stdout);
+        init_subscriber(subscriber).expect("Failed to initialize tracing");
+    } else {
+        let subscriber = get_subscriber(subscriber_name, default_filter_level, std::io::sink);
+        init_subscriber(subscriber).expect("Failed to initialize tracing");
+    }
+});
 
 pub struct TestApp {
     pub pool: PgPool,
@@ -24,14 +41,15 @@ async fn health_check_test() {
 }
 
 async fn configure_db(config: &DatabaseSettings) -> PgPool {
-    let mut conn = PgConnection::connect(&config.connfection_string_withot_db_name())
-        .await
-        .expect("Unable to connect to DB");
+    let mut conn =
+        PgConnection::connect(&config.connfection_string_withot_db_name().expose_secret())
+            .await
+            .expect("Unable to connect to DB");
     conn.execute(format!(r#"CREATE DATABASE "{}";"#, config.database_name).as_str())
         .await
         .expect("Failed to create database");
 
-    let pool = PgPool::connect(&config.connfection_string())
+    let pool = PgPool::connect(&config.connfection_string().expose_secret())
         .await
         .expect("Failed to connect to DB");
     sqlx::migrate!("./migrations")
@@ -43,21 +61,22 @@ async fn configure_db(config: &DatabaseSettings) -> PgPool {
 }
 
 async fn spawn_app() -> TestApp {
+    Lazy::force(&TRACING);
     let listener = std::net::TcpListener::bind("0.0.0.0:0").expect("Unable to bind to a socket");
-    let mut config = get_config().expect("Failed to read configuration");
-    config.database.database_name = Uuid::new_v4().to_string();
-    let pool = configure_db(&config.database).await;
     let port = listener
         .local_addr()
         .expect("Unable to get local addr")
         .port();
+    let addr = format!("http://localhost:{}", port);
+
+    let mut config = get_config().expect("Failed to read configuration");
+    config.database.database_name = Uuid::new_v4().to_string();
+    let pool = configure_db(&config.database).await;
+
     let server = zero2prod::startup::run(listener, pool.clone()).expect("Unable to start server");
     tokio::spawn(server);
 
-    TestApp {
-        addr: format!("http://localhost:{}", port),
-        pool: pool,
-    }
+    TestApp { addr, pool }
 }
 
 #[tokio::test]

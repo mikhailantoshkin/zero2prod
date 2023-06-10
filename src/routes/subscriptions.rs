@@ -13,11 +13,28 @@ pub struct Subscriber {
     email: String,
 }
 
-pub async fn subscriptions(
+#[tracing::instrument(
+    name="Adding a new subscriber", 
+    skip(pool, subscriber),
+    fields(
+        subscriber_email = %subscriber.email,
+        subscriber_name=subscriber.name
+    )
+)]
+pub async fn subscribe(
     State(pool): State<PgPool>,
     Form(subscriber): Form<Subscriber>,
 ) -> StatusCode {
-    let result = sqlx::query!(
+    let result = inster_subscriber(&pool, &subscriber).await;
+    match result {
+        Ok(_) => StatusCode::OK,
+        Err(_) => StatusCode::INTERNAL_SERVER_ERROR,
+    }
+}
+
+#[tracing::instrument(name = "Saving new subscriber to database", skip(pool, subscriber))]
+pub async fn inster_subscriber(pool: &PgPool, subscriber: &Subscriber) -> Result<(), sqlx::Error> {
+    sqlx::query!(
         r#"
     INSERT INTO subscriptions (id, email, name, subscribed_at)
     VALUES ($1, $2, $3, $4)
@@ -27,13 +44,11 @@ pub async fn subscriptions(
         subscriber.name,
         Utc::now(),
     )
-    .execute(&pool)
-    .await;
-    match result {
-        Ok(_) => StatusCode::OK,
-        Err(e) => {
-            println!("Query execution failed: {}", e);
-            StatusCode::INTERNAL_SERVER_ERROR
-        }
-    }
+    .execute(pool)
+    .await
+    .map_err(|e| {
+        tracing::error!("Failed to execute query {:?}", e);
+        e
+    })?;
+    Ok(())
 }

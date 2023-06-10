@@ -20,6 +20,12 @@ config = { version = "0.13" }
 anyhow = { version = "1" }
 chrono = { version = "0.4" }
 uuid = { version = "1.3", features = ['v4'] }
+tower-http = { version = "0.4", features = ["trace"] }
+tracing-subscriber = { version = "0.3", features = ["registry", "env-filter"] }
+tracing = { version = "0.1" }
+tracing-log = "0.1"
+tracing-bunyan-formatter = "0.3"
+secrecy = { version = "0.8", features = ["serde"] }
 
 [dependencies.sqlx]
 version = "0.6"
@@ -35,3 +41,4 @@ features = [
 
 [dev-dependencies]
 reqwest = { version = "0.11" }
+once_cell = "1"
