@@ -1,5 +1,8 @@
 use std::time::Duration;
 
+use sqlx::PgPool;
+use zero2prod::configuration::get_config;
+
 #[tokio::test]
 async fn health_check_test() {
     let addr = spawn_app().await;
@@ -16,11 +19,16 @@ async fn health_check_test() {
 
 async fn spawn_app() -> String {
     let listener = std::net::TcpListener::bind("0.0.0.0:0").expect("Unable to bind to a socket");
+    let config = get_config().expect("Failed to read configuration");
+    let conn_str = config.database.connfection_string();
     let port = listener
         .local_addr()
         .expect("Unable to get local addr")
         .port();
-    let server = zero2prod::startup::run(listener).expect("Unable to start server");
+    let conn = PgPool::connect(&conn_str)
+        .await
+        .expect("Unable to connecto to database");
+    let server = zero2prod::startup::run(listener, conn).expect("Unable to start server");
     tokio::spawn(server);
     format!("http://localhost:{}", port)
 }
@@ -28,6 +36,11 @@ async fn spawn_app() -> String {
 #[tokio::test]
 async fn test_subscribtion_200() {
     let addr = spawn_app().await;
+    let config = get_config().expect("Failed to read configuration");
+    let conn_str = config.database.connfection_string();
+    let conn = PgPool::connect(&conn_str)
+        .await
+        .expect("Unable to connecto to database");
     let client = reqwest::Client::new();
     let body = "name=le%20guin&email=ursula_le_guin%40gmail.com";
 
@@ -40,6 +53,12 @@ async fn test_subscribtion_200() {
         .await
         .expect("Failed to send the request");
     assert_eq!(200, resp.status().as_u16());
+    let saved = sqlx::query!("SELECT email, name FROM subscriptions")
+        .fetch_one(&conn)
+        .await
+        .expect("Failed to fetch users");
+    assert_eq!(saved.email, "ursula_le_guin@gmail.com");
+    assert_eq!(saved.name, "le guin");
 }
 
 #[tokio::test]
