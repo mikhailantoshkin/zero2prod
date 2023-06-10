@@ -22,6 +22,12 @@ impl DatabaseSettings {
             self.username, self.password, self.host, self.port, self.database_name
         )
     }
+    pub fn connfection_string_withot_db_name(&self) -> String {
+        format!(
+            "postgres://{}:{}@{}:{}",
+            self.username, self.password, self.host, self.port
+        )
+    }
 }
 
 pub fn get_config() -> Result<Settings, config::ConfigError> {
