@@ -15,6 +15,7 @@ name = "zero2prod"
 axum = { version = "0.6" }
 tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
 serde = { version = "1", features = ["derive"] }
+serde-aux = { version = "4" }
 hyper = { version = "0.14" }
 config = { version = "0.13" }
 anyhow = { version = "1" }
@@ -37,6 +38,7 @@ features = [
     "chrono",
     "migrate",
     "runtime-tokio-rustls",
+    "offline",
 ]
 
 [dev-dependencies]

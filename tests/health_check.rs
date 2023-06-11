@@ -1,7 +1,6 @@
 use std::time::Duration;
 
 use once_cell::sync::Lazy;
-use secrecy::ExposeSecret;
 use sqlx::{Connection, Executor, PgConnection, PgPool};
 use uuid::Uuid;
 use zero2prod::{
@@ -41,15 +40,14 @@ async fn health_check_test() {
 }
 
 async fn configure_db(config: &DatabaseSettings) -> PgPool {
-    let mut conn =
-        PgConnection::connect(&config.connfection_string_withot_db_name().expose_secret())
-            .await
-            .expect("Unable to connect to DB");
+    let mut conn = PgConnection::connect_with(&config.without_db())
+        .await
+        .expect("Unable to connect to DB");
     conn.execute(format!(r#"CREATE DATABASE "{}";"#, config.database_name).as_str())
         .await
         .expect("Failed to create database");
 
-    let pool = PgPool::connect(&config.connfection_string().expose_secret())
+    let pool = PgPool::connect_with(config.with_db())
         .await
         .expect("Failed to connect to DB");
     sqlx::migrate!("./migrations")
