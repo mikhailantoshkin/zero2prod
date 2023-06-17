@@ -3,27 +3,23 @@ use axum::{
     http::StatusCode,
 };
 use chrono::Utc;
-use serde::Deserialize;
+
 use sqlx::PgPool;
 use uuid::Uuid;
 
-#[derive(Deserialize)]
-pub struct Subscriber {
-    name: String,
-    email: String,
-}
+use crate::domain::NewSubscriber;
 
 #[tracing::instrument(
     name="Adding a new subscriber", 
     skip(pool, subscriber),
     fields(
-        subscriber_email = %subscriber.email,
-        subscriber_name=subscriber.name
+        subscriber_email = %subscriber.email.as_ref(),
+        subscriber_name=subscriber.name.as_ref()
     )
 )]
 pub async fn subscribe(
     State(pool): State<PgPool>,
-    Form(subscriber): Form<Subscriber>,
+    Form(subscriber): Form<NewSubscriber>,
 ) -> StatusCode {
     let result = inster_subscriber(&pool, &subscriber).await;
     match result {
@@ -33,15 +29,18 @@ pub async fn subscribe(
 }
 
 #[tracing::instrument(name = "Saving new subscriber to database", skip(pool, subscriber))]
-pub async fn inster_subscriber(pool: &PgPool, subscriber: &Subscriber) -> Result<(), sqlx::Error> {
+pub async fn inster_subscriber(
+    pool: &PgPool,
+    subscriber: &NewSubscriber,
+) -> Result<(), sqlx::Error> {
     sqlx::query!(
         r#"
     INSERT INTO subscriptions (id, email, name, subscribed_at)
     VALUES ($1, $2, $3, $4)
     "#,
         Uuid::new_v4(),
-        subscriber.email,
-        subscriber.name,
+        subscriber.email.as_ref(),
+        subscriber.name.as_ref(),
         Utc::now(),
     )
     .execute(pool)

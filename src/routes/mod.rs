@@ -1,3 +1,4 @@
+mod error_handlers;
 mod health_check;
 mod subscriptions;
 
