@@ -3,9 +3,9 @@ use axum::{
     http::StatusCode,
 };
 use chrono::Utc;
+use uuid::Uuid;
 
 use sqlx::PgPool;
-use uuid::Uuid;
 
 use crate::domain::NewSubscriber;
 
