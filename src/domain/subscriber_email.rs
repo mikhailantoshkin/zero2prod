@@ -1,9 +1,9 @@
 use std::fmt::Display;
 
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use validator::validate_email;
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Serialize, Clone)]
 #[serde(try_from = "String")]
 pub struct SubscriberEmail(String);
 

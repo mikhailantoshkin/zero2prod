@@ -1,27 +1,39 @@
-use std::path::PathBuf;
+use std::{path::PathBuf, time::Duration};
 
 use secrecy::{ExposeSecret, Secret};
-use serde::Deserialize;
+use serde::{Deserialize, Deserializer};
 use serde_aux::field_attributes::deserialize_number_from_string;
 use sqlx::{
     postgres::{PgConnectOptions, PgSslMode},
     ConnectOptions,
 };
 
-#[derive(Deserialize)]
+use crate::domain::SubscriberEmail;
+
+#[derive(Deserialize, Clone)]
 pub struct Settings {
     pub database: DatabaseSettings,
     pub app: AppSettings,
+    pub email_client: EmailClientSettings,
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Clone)]
 pub struct AppSettings {
     pub host: String,
     #[serde(deserialize_with = "deserialize_number_from_string")]
     pub port: u16,
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Clone)]
+pub struct EmailClientSettings {
+    pub base_url: String,
+    pub sender_email: SubscriberEmail,
+    pub authorization_token: Secret<String>,
+    #[serde(deserialize_with = "deserialize_duration_from_millis")]
+    pub timeout_millis: Duration,
+}
+
+#[derive(Deserialize, Clone)]
 pub struct DatabaseSettings {
     pub username: String,
     pub password: Secret<String>,
@@ -53,25 +65,6 @@ impl DatabaseSettings {
     }
 }
 
-pub fn get_config() -> Result<Settings, config::ConfigError> {
-    let environment: Environment = std::env::var("APP_ENVIRONMENT")
-        .unwrap_or_else(|_| "local".into())
-        .try_into()
-        .expect("Failed to parse API_EVIRONMENT");
-    let config_dir: PathBuf = std::env::var("CONFIG_DIR")
-        .unwrap_or_else(|_| match environment {
-            Environment::Local => "configuration".into(),
-            Environment::Production => "/etc/zero2prod".into(),
-        })
-        .into();
-    config::Config::builder()
-        .add_source(config::File::from(config_dir.join("base")).required(true))
-        .add_source(config::File::from(config_dir.join(environment.as_str())).required(true))
-        .add_source(config::Environment::with_prefix("app"))
-        .build()?
-        .try_deserialize()
-}
-
 pub enum Environment {
     Local,
     Production,
@@ -98,4 +91,31 @@ impl TryFrom<String> for Environment {
             )),
         }
     }
+}
+
+fn deserialize_duration_from_millis<'de, D>(deserializer: D) -> Result<Duration, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    let millis = u64::deserialize(deserializer)?;
+    Ok(Duration::from_millis(millis))
+}
+
+pub fn get_config() -> Result<Settings, config::ConfigError> {
+    let environment: Environment = std::env::var("APP_ENVIRONMENT")
+        .unwrap_or_else(|_| "local".into())
+        .try_into()
+        .expect("Failed to parse API_EVIRONMENT");
+    let config_dir: PathBuf = std::env::var("CONFIG_DIR")
+        .unwrap_or_else(|_| match environment {
+            Environment::Local => "configuration".into(),
+            Environment::Production => "/etc/zero2prod".into(),
+        })
+        .into();
+    config::Config::builder()
+        .add_source(config::File::from(config_dir.join("base")).required(true))
+        .add_source(config::File::from(config_dir.join(environment.as_str())).required(true))
+        .add_source(config::Environment::with_prefix("app"))
+        .build()?
+        .try_deserialize()
 }
