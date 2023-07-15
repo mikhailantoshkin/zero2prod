@@ -9,6 +9,8 @@ use zero2prod::{
     telemetry::{get_subscriber, init_subscriber},
 };
 
+use wiremock::MockServer;
+
 static TRACING: Lazy<()> = Lazy::new(|| {
     let default_filter_level = "info".into();
     let subscriber_name = "test".into();
@@ -24,10 +26,11 @@ static TRACING: Lazy<()> = Lazy::new(|| {
 pub struct TestApp {
     pub pool: PgPool,
     pub addr: String,
+    pub email_server: MockServer,
 }
 
 impl TestApp {
-    pub async fn post_subscribtion(&self, body: String) -> reqwest::Response {
+    pub async fn post_subscription(&self, body: String) -> reqwest::Response {
         reqwest::Client::new()
             .post(format!("{}/subsriptions", self.addr))
             .header("Content-Type", "application/x-www-form-urlencoded")
@@ -60,6 +63,7 @@ pub async fn configure_db(config: &DatabaseSettings) -> PgPool {
 
 pub async fn spawn_app() -> TestApp {
     Lazy::force(&TRACING);
+    let mock_server = MockServer::start().await;
     // Randomise configuration to ensure test isolation
     let configuration = {
         let mut c = get_config().expect("Failed to read configuration.");
@@ -67,6 +71,7 @@ pub async fn spawn_app() -> TestApp {
         c.database.database_name = Uuid::new_v4().to_string();
         // Use a random OS port
         c.app.port = 0;
+        c.email_client.base_url = mock_server.uri();
         c
     };
     // Create and migrate the database
@@ -81,5 +86,14 @@ pub async fn spawn_app() -> TestApp {
         // How do we get these?
         addr: addr,
         pool: get_connection_pool(&configuration.database).await.unwrap(),
+        email_server: mock_server,
     }
+}
+
+pub fn get_links(text: &str) -> Vec<String> {
+    linkify::LinkFinder::new()
+        .links(text)
+        .filter(|l| *l.kind() == linkify::LinkKind::Url)
+        .map(|l| l.as_str().to_owned())
+        .collect()
 }

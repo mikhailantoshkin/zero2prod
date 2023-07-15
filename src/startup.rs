@@ -2,6 +2,7 @@ use std::net::{IpAddr, SocketAddr};
 
 use anyhow::Context;
 use axum::{
+    extract::FromRef,
     routing::{get, post},
     Router,
 };
@@ -38,10 +39,7 @@ impl Application {
         let local_addr = listener.local_addr()?;
         tracing::info!("Listening on {}", &local_addr);
         let server = build_server(listener, pool, email_client)?;
-        Ok(Application {
-            local_addr: local_addr,
-            server: server,
-        })
+        Ok(Application { local_addr, server })
     }
     pub fn port(&self) -> u16 {
         self.local_addr.port()
@@ -58,6 +56,12 @@ pub async fn get_connection_pool(config: &DatabaseSettings) -> Result<Pool<Postg
     PgPool::connect_with(config.with_db()).await
 }
 
+#[derive(FromRef, Clone)]
+struct AppState {
+    conn: PgPool,
+    email_client: EmailClient,
+}
+
 pub fn build_server(
     listener: std::net::TcpListener,
     conn: PgPool,
@@ -71,7 +75,7 @@ pub fn build_server(
                 tracing::debug_span!("http-request", request_id = %Uuid::new_v4())
             }),
         )
-        .with_state(conn).with_state(email_client);
+        .with_state(AppState{conn, email_client});
     let server = axum::Server::from_tcp(listener)?.serve(app.into_make_service());
     Ok(server)
 }

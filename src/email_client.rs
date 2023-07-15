@@ -5,7 +5,7 @@ use reqwest::{Client, Url};
 use secrecy::{ExposeSecret, Secret};
 use serde::Serialize;
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct EmailClient {
     http_client: Client,
     base_url: Url,
@@ -24,8 +24,8 @@ impl EmailClient {
         Self {
             http_client: Client::builder().timeout(timeout).build().unwrap(),
             base_url: Url::from_str(&base_url).unwrap(),
-            sender: sender,
-            auth_token: auth_token,
+            sender,
+            auth_token,
         }
     }
     pub async fn send_email(
@@ -39,7 +39,7 @@ impl EmailClient {
         let request_body = SendEmailRequest {
             from: &self.sender,
             to: &recipient,
-            subject: subject,
+            subject,
             html_body: html_content,
             text_body: text_content,
         };
