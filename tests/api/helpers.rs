@@ -23,10 +23,16 @@ static TRACING: Lazy<()> = Lazy::new(|| {
     }
 });
 
+pub struct ConfirmationLinks {
+    pub html: reqwest::Url,
+    pub plain_text: reqwest::Url,
+}
+
 pub struct TestApp {
     pub pool: PgPool,
     pub addr: String,
     pub email_server: MockServer,
+    pub port: u16,
 }
 
 impl TestApp {
@@ -35,10 +41,30 @@ impl TestApp {
             .post(format!("{}/subsriptions", self.addr))
             .header("Content-Type", "application/x-www-form-urlencoded")
             .body(body)
-            .timeout(Duration::from_secs(1))
+            .timeout(Duration::from_secs(2))
             .send()
             .await
             .expect("Failed to send the request")
+    }
+
+    pub fn get_confirmation_links(&self, email_request: &wiremock::Request) -> ConfirmationLinks {
+        let body: serde_json::Value = serde_json::from_slice(&email_request.body).unwrap();
+        let get_link = |s: &str| {
+            let links: Vec<_> = linkify::LinkFinder::new()
+                .links(s)
+                .filter(|l| *l.kind() == linkify::LinkKind::Url)
+                .collect();
+            assert_eq!(links.len(), 1);
+            let raw_link = links[0].as_str().to_owned();
+            let mut confirmation_link = reqwest::Url::parse(&raw_link).unwrap();
+            // Let's make sure we don't call random APIs on the web
+            assert_eq!(confirmation_link.host_str().unwrap(), "127.0.0.1");
+            confirmation_link.set_port(Some(self.port)).unwrap();
+            confirmation_link
+        };
+        let html = get_link(&body["HtmlBody"].as_str().unwrap());
+        let plain_text = get_link(&body["TextBody"].as_str().unwrap());
+        ConfirmationLinks { html, plain_text }
     }
 }
 
@@ -80,20 +106,15 @@ pub async fn spawn_app() -> TestApp {
     let app = Application::build(configuration.clone())
         .await
         .expect("Failed to build application.");
-    let addr = format!("http://{}:{}", app.addr(), app.port());
+    let ip_addr = app.addr();
+    let port = app.port();
+    let addr = format!("http://{}:{}", ip_addr, port);
     let _ = tokio::spawn(app.run_forever());
     TestApp {
         // How do we get these?
         addr: addr,
+        port: port,
         pool: get_connection_pool(&configuration.database).await.unwrap(),
         email_server: mock_server,
     }
-}
-
-pub fn get_links(text: &str) -> Vec<String> {
-    linkify::LinkFinder::new()
-        .links(text)
-        .filter(|l| *l.kind() == linkify::LinkKind::Url)
-        .map(|l| l.as_str().to_owned())
-        .collect()
 }

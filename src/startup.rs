@@ -17,7 +17,7 @@ type AxumServer =
 use crate::{
     configuration::{DatabaseSettings, Settings},
     email_client::EmailClient,
-    routes::{health_check, subscribe},
+    routes::{health_check, subscribe, subscribtion_confirm},
 };
 
 pub struct Application {
@@ -38,7 +38,7 @@ impl Application {
         let listener = std::net::TcpListener::bind(addr).context("Unable to bind to a socket")?;
         let local_addr = listener.local_addr()?;
         tracing::info!("Listening on {}", &local_addr);
-        let server = build_server(listener, pool, email_client)?;
+        let server = build_server(listener, pool, email_client, config.app.base_url)?;
         Ok(Application { local_addr, server })
     }
     pub fn port(&self) -> u16 {
@@ -56,26 +56,32 @@ pub async fn get_connection_pool(config: &DatabaseSettings) -> Result<Pool<Postg
     PgPool::connect_with(config.with_db()).await
 }
 
+#[derive(Clone)]
+pub struct ApplicationBaseUrl(pub String);
+
 #[derive(FromRef, Clone)]
 struct AppState {
     conn: PgPool,
     email_client: EmailClient,
+    base_url: ApplicationBaseUrl,
 }
 
 pub fn build_server(
     listener: std::net::TcpListener,
     conn: PgPool,
     email_client: EmailClient,
+    base_url: String,
 ) -> Result<AxumServer, hyper::Error> {
     let app = Router::new()
         .route("/health_check", get(health_check))
         .route("/subsriptions", post(subscribe))
+        .route("/subscriptions/confirm", get(subscribtion_confirm))
         .layer(
             TraceLayer::new_for_http().make_span_with(|_req: &Request<Body>| {
                 tracing::debug_span!("http-request", request_id = %Uuid::new_v4())
             }),
         )
-        .with_state(AppState{conn, email_client});
+        .with_state(AppState{conn, email_client, base_url: ApplicationBaseUrl(base_url)});
     let server = axum::Server::from_tcp(listener)?.serve(app.into_make_service());
     Ok(server)
 }

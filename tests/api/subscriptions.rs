@@ -3,7 +3,7 @@ use wiremock::{
     Mock, ResponseTemplate,
 };
 
-use crate::helpers::{get_links, spawn_app};
+use crate::helpers::spawn_app;
 
 #[tokio::test]
 async fn test_subscribtion_200() {
@@ -112,12 +112,7 @@ async fn subscribe_sends_a_confirmation_email_with_a_link() {
     app.post_subscription(body.into()).await;
 
     let email_request = &app.email_server.received_requests().await.unwrap()[0];
-    let body: serde_json::Value = serde_json::from_slice(&email_request.body).unwrap();
+    let links = app.get_confirmation_links(email_request);
 
-    let html_links = get_links(&body["HtmlBody"].as_str().unwrap());
-    assert_eq!(html_links.len(), 1);
-    let text_links = get_links(&body["TextBody"].as_str().unwrap());
-    assert_eq!(text_links.len(), 1);
-
-    assert_eq!(html_links[0], text_links[0])
+    assert_eq!(links.html, links.plain_text)
 }

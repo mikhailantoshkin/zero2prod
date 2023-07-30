@@ -1,6 +1,7 @@
 use std::{str::FromStr, time::Duration};
 
 use crate::domain::SubscriberEmail;
+
 use reqwest::{Client, Url};
 use secrecy::{ExposeSecret, Secret};
 use serde::Serialize;
