@@ -4,7 +4,8 @@ use serde::Deserialize;
 use sqlx::PgPool;
 use uuid::Uuid;
 
-use super::error_handlers::ApiError;
+use super::error_handlers::AppError;
+use anyhow::Context;
 
 #[derive(Deserialize)]
 pub struct QueryParams {
@@ -15,15 +16,15 @@ pub struct QueryParams {
 pub async fn subscribtion_confirm(
     State(pool): State<PgPool>,
     Query(params): Query<QueryParams>,
-) -> Result<StatusCode, ApiError> {
-    let id = get_subscriber_id_by_token(&pool, &params.subscription_token).await?;
+) -> Result<StatusCode, AppError> {
+    let id = get_subscriber_id_by_token(&pool, &params.subscription_token)
+        .await
+        .context("Failed to aquire connection from the db pool")?;
     match id {
         None => return Ok(StatusCode::UNAUTHORIZED),
-        Some(subscriber_id) => {
-            if confirm_subscriber(&pool, subscriber_id).await.is_err() {
-                return Ok(StatusCode::INTERNAL_SERVER_ERROR);
-            }
-        }
+        Some(subscriber_id) => confirm_subscriber(&pool, subscriber_id)
+            .await
+            .context("Failed to confirm subscriber")?,
     }
     Ok(StatusCode::OK)
 }
@@ -38,11 +39,7 @@ pub async fn get_subscriber_id_by_token(
         token,
     )
     .fetch_optional(pool)
-    .await
-    .map_err(|e| {
-        tracing::error!("Failed to execute query: {:?}", e);
-        e
-    })?;
+    .await?;
     Ok(result.map(|r| r.subscriber_id))
 }
 
@@ -53,10 +50,6 @@ pub async fn confirm_subscriber(pool: &PgPool, subscriber_id: Uuid) -> Result<()
         subscriber_id,
     )
     .execute(pool)
-    .await
-    .map_err(|e| {
-        tracing::error!("Failed to execute query: {:?}", e);
-        e
-    })?;
+    .await?;
     Ok(())
 }

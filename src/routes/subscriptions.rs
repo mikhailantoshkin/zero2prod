@@ -1,3 +1,4 @@
+use anyhow::Context;
 use axum::{
     extract::{Form, State},
     http::StatusCode,
@@ -6,11 +7,11 @@ use chrono::Utc;
 use rand::{distributions::Alphanumeric, thread_rng, Rng};
 use uuid::Uuid;
 
-use sqlx::PgPool;
+use sqlx::{PgPool, Postgres, Transaction};
 
 use crate::{domain::NewSubscriber, email_client::EmailClient, startup::ApplicationBaseUrl};
 
-use super::error_handlers::ApiError;
+use super::error_handlers::AppError;
 
 #[tracing::instrument(
     name="Adding a new subscriber", 
@@ -25,17 +26,34 @@ pub async fn subscribe(
     State(email_client): State<EmailClient>,
     State(base_url): State<ApplicationBaseUrl>,
     Form(subscriber): Form<NewSubscriber>,
-) -> Result<StatusCode, ApiError> {
-    let subscriber_id = inster_subscriber(&pool, &subscriber).await?;
+) -> Result<StatusCode, AppError> {
+    let mut transaction = pool
+        .begin()
+        .await
+        .context("Failed to acquire a Postgres connection from the pool")?;
+    let subscriber_id = inster_subscriber(&mut transaction, &subscriber)
+        .await
+        .context("Failed to insert new subscriber")?;
     let token = generate_subscription_token();
-    store_token(&pool, subscriber_id, &token).await?;
-    send_conformation_email(&email_client, subscriber, &base_url.0, &token).await?;
+    store_token(&mut transaction, subscriber_id, &token)
+        .await
+        .context("Failed to store conformation token for a new subscriber")?;
+    transaction
+        .commit()
+        .await
+        .context("Failed to commit transaction")?;
+    send_conformation_email(&email_client, subscriber, &base_url.0, &token)
+        .await
+        .context("Failed to send a conformation email")?;
     Ok(StatusCode::OK)
 }
 
-#[tracing::instrument(name = "Saving new subscriber to database", skip(pool, subscriber))]
+#[tracing::instrument(
+    name = "Saving new subscriber to database",
+    skip(transaction, subscriber)
+)]
 pub async fn inster_subscriber(
-    pool: &PgPool,
+    transaction: &mut Transaction<'_, Postgres>,
     subscriber: &NewSubscriber,
 ) -> Result<Uuid, sqlx::Error> {
     let subscriber_id = Uuid::new_v4();
@@ -49,7 +67,7 @@ pub async fn inster_subscriber(
         subscriber.name.as_ref(),
         Utc::now(),
     )
-    .execute(pool)
+    .execute(transaction)
     .await
     .map_err(|e| {
         tracing::error!("Failed to execute query {:?}", e);
@@ -58,9 +76,9 @@ pub async fn inster_subscriber(
     Ok(subscriber_id)
 }
 
-#[tracing::instrument(name = "Store subscription token to db", skip(pool, token))]
+#[tracing::instrument(name = "Store subscription token to db", skip(transaction, token))]
 pub async fn store_token(
-    pool: &PgPool,
+    transaction: &mut Transaction<'_, Postgres>,
     subscriber_id: Uuid,
     token: &str,
 ) -> Result<(), sqlx::Error> {
@@ -72,7 +90,7 @@ pub async fn store_token(
         token,
         subscriber_id
     )
-    .execute(pool)
+    .execute(transaction)
     .await
     .map_err(|e| {
         tracing::error!("Failed to execute query: {:?}", e);
@@ -90,7 +108,7 @@ pub async fn send_conformation_email(
     subscriber: NewSubscriber,
     base_url: &str,
     conformation_token: &str,
-) -> Result<(), anyhow::Error> {
+) -> Result<(), reqwest::Error> {
     let confirmation_link = format!(
         "{}/subscriptions/confirm?subscription_token={}",
         base_url, conformation_token

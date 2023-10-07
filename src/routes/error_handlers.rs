@@ -1,3 +1,5 @@
+use std::fmt::{Debug, Display};
+
 use crate::domain::NameValidationError;
 use axum::http::StatusCode;
 use axum::response::IntoResponse;
@@ -8,28 +10,41 @@ impl IntoResponse for NameValidationError {
     }
 }
 
-pub enum ApiError {
-    DbError,
-    UnexpectedError,
+#[derive(thiserror::Error)]
+pub enum AppError {
+    UnexpectedError(#[from] anyhow::Error),
 }
 
-impl IntoResponse for ApiError {
+impl Debug for AppError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        error_chain_fmt(self, f)
+    }
+}
+
+impl Display for AppError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "Unexpected backend error")
+    }
+}
+
+impl IntoResponse for AppError {
     fn into_response(self) -> axum::response::Response {
+        tracing::error!("Error in handler: {:?}", self);
         match self {
-            ApiError::DbError => StatusCode::INTERNAL_SERVER_ERROR.into_response(),
-            ApiError::UnexpectedError => StatusCode::INTERNAL_SERVER_ERROR.into_response(),
+            AppError::UnexpectedError(_) => StatusCode::INTERNAL_SERVER_ERROR.into_response(),
         }
     }
 }
 
-impl From<sqlx::Error> for ApiError {
-    fn from(_value: sqlx::Error) -> Self {
-        ApiError::DbError
+pub fn error_chain_fmt(
+    e: &impl std::error::Error,
+    f: &mut std::fmt::Formatter<'_>,
+) -> std::fmt::Result {
+    writeln!(f, "{}\n", e)?;
+    let mut current = e.source();
+    while let Some(cause) = current {
+        writeln!(f, "Caused by: \n\t{}", cause)?;
+        current = cause.source();
     }
-}
-
-impl From<anyhow::Error> for ApiError {
-    fn from(_value: anyhow::Error) -> Self {
-        ApiError::UnexpectedError
-    }
+    Ok(())
 }

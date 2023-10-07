@@ -35,8 +35,8 @@ impl EmailClient {
         subject: &str,
         html_content: &str,
         text_content: &str,
-    ) -> Result<(), anyhow::Error> {
-        let url = self.base_url.join("email")?;
+    ) -> Result<(), reqwest::Error> {
+        let url = self.base_url.join("email").unwrap();
         let request_body = SendEmailRequest {
             from: &self.sender,
             to: &recipient,
