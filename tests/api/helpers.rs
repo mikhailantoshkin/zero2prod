@@ -62,9 +62,18 @@ impl TestApp {
             confirmation_link.set_port(Some(self.port)).unwrap();
             confirmation_link
         };
-        let html = get_link(&body["HtmlBody"].as_str().unwrap());
-        let plain_text = get_link(&body["TextBody"].as_str().unwrap());
+        let html = get_link(body["HtmlBody"].as_str().unwrap());
+        let plain_text = get_link(body["TextBody"].as_str().unwrap());
         ConfirmationLinks { html, plain_text }
+    }
+
+    pub async fn post_newsletters(&self, body: serde_json::Value) -> reqwest::Response {
+        reqwest::Client::new()
+            .post(&format!("{}/newsletters", &self.addr))
+            .json(&body)
+            .send()
+            .await
+            .expect("Unable to send request")
     }
 }
 
@@ -109,11 +118,11 @@ pub async fn spawn_app() -> TestApp {
     let ip_addr = app.addr();
     let port = app.port();
     let addr = format!("http://{}:{}", ip_addr, port);
-    let _ = tokio::spawn(app.run_forever());
+    std::mem::drop(tokio::spawn(app.run_forever()));
     TestApp {
         // How do we get these?
-        addr: addr,
-        port: port,
+        addr,
+        port,
         pool: get_connection_pool(&configuration.database).await.unwrap(),
         email_server: mock_server,
     }

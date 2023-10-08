@@ -78,36 +78,25 @@ mod tests {
     #[test]
     fn long_name_is_invalid() {
         let name = "a".repeat(257);
-        assert!(SubscriberName::parse(name).is_err_and(|x| match x {
-            NameValidationError::TooLong => true,
-            _ => false,
-        }))
+        assert!(
+            SubscriberName::parse(name).is_err_and(|x| matches!(x, NameValidationError::TooLong))
+        )
     }
     #[test]
     fn witespace_name_is_invalid() {
         let name = " ".to_string();
-        assert!(SubscriberName::parse(name).is_err_and(|x| match x {
-            NameValidationError::Empy => true,
-            _ => false,
-        }))
+        assert!(SubscriberName::parse(name).is_err_and(|x| matches!(x, NameValidationError::Empy)))
     }
     #[test]
     fn empyt_name_is_invalid() {
         let name = "".to_string();
-        assert!(SubscriberName::parse(name).is_err_and(|x| match x {
-            NameValidationError::Empy => true,
-            _ => false,
-        }))
+        assert!(SubscriberName::parse(name).is_err_and(|x| matches!(x, NameValidationError::Empy)))
     }
     #[test]
     fn name_with_invallid_chars_is_rejected() {
         for name in FORBIDEN_CHARS {
-            assert!(
-                SubscriberName::parse(name.to_string()).is_err_and(|x| match x {
-                    NameValidationError::FrobidenCharecter => true,
-                    _ => false,
-                })
-            )
+            assert!(SubscriberName::parse(name.to_string())
+                .is_err_and(|x| matches!(x, NameValidationError::FrobidenCharecter)))
         }
     }
     #[test]

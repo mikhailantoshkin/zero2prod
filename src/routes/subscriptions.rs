@@ -123,7 +123,7 @@ pub async fn send_conformation_email(
         confirmation_link
     );
     email_client
-        .send_email(subscriber.email, "Welcome!", html_body, text_body)
+        .send_email(&subscriber.email, "Welcome!", html_body, text_body)
         .await
 }
 

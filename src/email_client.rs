@@ -31,7 +31,7 @@ impl EmailClient {
     }
     pub async fn send_email(
         &self,
-        recipient: SubscriberEmail,
+        recipient: &SubscriberEmail,
         subject: &str,
         html_content: &str,
         text_content: &str,
@@ -39,7 +39,7 @@ impl EmailClient {
         let url = self.base_url.join("email").unwrap();
         let request_body = SendEmailRequest {
             from: &self.sender,
-            to: &recipient,
+            to: recipient,
             subject,
             html_body: html_content,
             text_body: text_content,
@@ -127,7 +127,7 @@ mod tests {
             .mount(&mock_server)
             .await;
         let result = email_client(mock_server.uri())
-            .send_email(random_email(), &subject(), &content(), &content())
+            .send_email(&random_email(), &subject(), &content(), &content())
             .await;
         assert!(result.is_ok());
     }
@@ -140,7 +140,7 @@ mod tests {
             .mount(&mock_server)
             .await;
         let result = email_client(mock_server.uri())
-            .send_email(random_email(), &subject(), &content(), &content())
+            .send_email(&random_email(), &subject(), &content(), &content())
             .await;
         assert!(result.is_err());
     }
@@ -154,7 +154,7 @@ mod tests {
             .mount(&mock_server)
             .await;
         let result = email_client(mock_server.uri())
-            .send_email(random_email(), &subject(), &content(), &content())
+            .send_email(&random_email(), &subject(), &content(), &content())
             .await;
         assert!(result.is_err());
     }
