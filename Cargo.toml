@@ -13,7 +13,11 @@ name = "zero2prod"
 
 [dependencies]
 anyhow = { version = "1" }
-axum = { version = "0.6", features = ["macros"] }
+argon2 = { version = "0.5", features = ["std"] }
+axum = { version = "0.6", features = ["macros", "headers"] }
+# 0.21 has a nasty api
+base64 = "0.20"
+base16ct = { version = "0.2", features = ["alloc"] }
 chrono = { version = "0.4" }
 config = { version = "0.13" }
 hyper = { version = "0.14" }
