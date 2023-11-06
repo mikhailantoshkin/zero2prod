@@ -11,7 +11,7 @@ use sqlx::{PgPool, Postgres, Transaction};
 
 use crate::{domain::NewSubscriber, email_client::EmailClient, startup::ApplicationBaseUrl};
 
-use super::error_handlers::AppError;
+use super::error_handlers::PublishError;
 
 #[tracing::instrument(
     name="Adding a new subscriber", 
@@ -26,7 +26,7 @@ pub async fn subscribe(
     State(email_client): State<EmailClient>,
     State(base_url): State<ApplicationBaseUrl>,
     Form(subscriber): Form<NewSubscriber>,
-) -> Result<StatusCode, AppError> {
+) -> Result<StatusCode, PublishError> {
     let mut transaction = pool
         .begin()
         .await

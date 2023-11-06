@@ -17,7 +17,9 @@ type AxumServer =
 use crate::{
     configuration::{DatabaseSettings, Settings},
     email_client::EmailClient,
-    routes::{health_check, publish_newsletter, subscribe, subscribtion_confirm},
+    routes::{
+        health_check, home, login, login_form, publish_newsletter, subscribe, subscribtion_confirm,
+    },
 };
 
 pub struct Application {
@@ -77,6 +79,8 @@ pub fn build_server(
         .route("/subsriptions", post(subscribe))
         .route("/subscriptions/confirm", get(subscribtion_confirm))
         .route("/newsletters", post(publish_newsletter))
+        .route("/home", get(home))
+        .route("/login", get(login_form).post(login))
         .layer(
             TraceLayer::new_for_http().make_span_with(|_req: &Request<Body>| {
                 tracing::debug_span!("http-request", request_id = %Uuid::new_v4())
