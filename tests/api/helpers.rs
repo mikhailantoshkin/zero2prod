@@ -1,5 +1,6 @@
 use argon2::password_hash::SaltString;
 use argon2::{Algorithm, Argon2, Params, PasswordHasher, Version};
+
 use std::time::Duration;
 
 use once_cell::sync::Lazy;
@@ -74,11 +75,12 @@ pub struct TestApp {
     pub email_server: MockServer,
     pub port: u16,
     pub test_user: TestUser,
+    pub api_client: reqwest::Client,
 }
 
 impl TestApp {
     pub async fn post_subscription(&self, body: String) -> reqwest::Response {
-        reqwest::Client::new()
+        self.api_client
             .post(format!("{}/subsriptions", self.addr))
             .header("Content-Type", "application/x-www-form-urlencoded")
             .body(body)
@@ -109,13 +111,36 @@ impl TestApp {
     }
 
     pub async fn post_newsletters(&self, body: serde_json::Value) -> reqwest::Response {
-        reqwest::Client::new()
+        self.api_client
             .post(&format!("{}/newsletters", &self.addr))
             .basic_auth(&self.test_user.username, Some(&self.test_user.password))
             .json(&body)
             .send()
             .await
             .expect("Unable to send request")
+    }
+
+    pub async fn post_login<Body>(&self, body: &Body) -> reqwest::Response
+    where
+        Body: serde::Serialize,
+    {
+        self.api_client
+            .post(&format!("{}/login", self.addr))
+            .form(body)
+            .send()
+            .await
+            .expect("Failed to send request")
+    }
+
+    pub async fn get_login_html(&self) -> String {
+        self.api_client
+            .get(format!("{}/login", &self.addr))
+            .send()
+            .await
+            .expect("Failed to send request")
+            .text()
+            .await
+            .unwrap()
     }
 }
 
@@ -161,12 +186,18 @@ pub async fn spawn_app() -> TestApp {
     let port = app.port();
     let addr = format!("http://{}:{}", ip_addr, port);
     std::mem::drop(tokio::spawn(app.run_forever()));
+    let client = reqwest::Client::builder()
+        .redirect(reqwest::redirect::Policy::none())
+        .cookie_store(true)
+        .build()
+        .unwrap();
     let test_app = TestApp {
         addr,
         port,
         pool: get_connection_pool(&configuration.database).await.unwrap(),
         email_server: mock_server,
         test_user: TestUser::generate(),
+        api_client: client,
     };
     test_app.test_user.store(&test_app.pool).await;
     test_app

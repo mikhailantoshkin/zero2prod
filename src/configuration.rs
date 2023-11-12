@@ -23,6 +23,8 @@ pub struct AppSettings {
     #[serde(deserialize_with = "deserialize_number_from_string")]
     pub port: u16,
     pub base_url: String,
+    #[serde(deserialize_with = "deserialize_key_secret")]
+    pub hmac_secret: Vec<u8>,
 }
 
 #[derive(Deserialize, Clone)]
@@ -100,6 +102,20 @@ where
 {
     let millis = u64::deserialize(deserializer)?;
     Ok(Duration::from_millis(millis))
+}
+
+fn deserialize_key_secret<'de, D>(deserializer: D) -> Result<Vec<u8>, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    let secret: Vec<u8> = String::deserialize(deserializer)?.into();
+    if secret.len() < 32 {
+        return Err(serde::de::Error::custom(
+            "Secret string must be at least 32 bytes long",
+        ));
+    }
+
+    Ok(secret)
 }
 
 pub fn get_config() -> Result<Settings, config::ConfigError> {

@@ -1,4 +1,7 @@
-use std::net::{IpAddr, SocketAddr};
+use std::{
+    net::{IpAddr, SocketAddr},
+    ops::Deref,
+};
 
 use anyhow::Context;
 use axum::{
@@ -6,7 +9,9 @@ use axum::{
     routing::{get, post},
     Router,
 };
+use axum_extra::extract::cookie::Key;
 use hyper::{Body, Request};
+use secrecy::Secret;
 use sqlx::{PgPool, Pool, Postgres};
 use tower_http::trace::TraceLayer;
 use uuid::Uuid;
@@ -40,15 +45,24 @@ impl Application {
         let listener = std::net::TcpListener::bind(addr).context("Unable to bind to a socket")?;
         let local_addr = listener.local_addr()?;
         tracing::info!("Listening on {}", &local_addr);
-        let server = build_server(listener, pool, email_client, config.app.base_url)?;
+        let server = build_server(
+            listener,
+            pool,
+            email_client,
+            config.app.base_url,
+            &config.app.hmac_secret,
+        )?;
         Ok(Application { local_addr, server })
     }
+
     pub fn port(&self) -> u16 {
         self.local_addr.port()
     }
+
     pub fn addr(&self) -> IpAddr {
         self.local_addr.ip()
     }
+
     pub async fn run_forever(self) -> Result<(), hyper::Error> {
         self.server.await
     }
@@ -61,18 +75,31 @@ pub async fn get_connection_pool(config: &DatabaseSettings) -> Result<Pool<Postg
 #[derive(Clone)]
 pub struct ApplicationBaseUrl(pub String);
 
+#[derive(Clone)]
+pub struct HmacSecret(pub Secret<String>);
+
+impl Deref for HmacSecret {
+    type Target = Secret<String>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
 #[derive(FromRef, Clone)]
 struct AppState {
     conn: PgPool,
     email_client: EmailClient,
     base_url: ApplicationBaseUrl,
+    key: Key,
 }
 
-pub fn build_server(
+fn build_server(
     listener: std::net::TcpListener,
     conn: PgPool,
     email_client: EmailClient,
     base_url: String,
+    secret: &[u8],
 ) -> Result<AxumServer, hyper::Error> {
     let app = Router::new()
         .route("/health_check", get(health_check))
@@ -86,7 +113,7 @@ pub fn build_server(
                 tracing::debug_span!("http-request", request_id = %Uuid::new_v4())
             }),
         )
-        .with_state(AppState{conn, email_client, base_url: ApplicationBaseUrl(base_url)});
+        .with_state(AppState{conn, email_client, base_url: ApplicationBaseUrl(base_url), key: Key::derive_from(secret)});
     let server = axum::Server::from_tcp(listener)?.serve(app.into_make_service());
     Ok(server)
 }

@@ -1,5 +1,6 @@
 [app]
 port = 8080
+hmac_secret = "this-is-a-very-long-secret-string!"
 [database]
 host = "127.0.0.1"
 port = 5432
