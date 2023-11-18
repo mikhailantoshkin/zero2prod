@@ -5,31 +5,42 @@ use std::{
 
 use anyhow::Context;
 use axum::{
+    error_handling::HandleErrorLayer,
     extract::FromRef,
+    http::StatusCode,
     routing::{get, post},
-    Router,
+    BoxError, Router,
 };
 use axum_extra::extract::cookie::Key;
+use fred::{
+    clients::RedisClient,
+    interfaces::ClientLike,
+    types::{ConnectHandle, RedisConfig},
+};
 use hyper::{Body, Request};
-use secrecy::Secret;
+use secrecy::{ExposeSecret, Secret};
 use sqlx::{PgPool, Pool, Postgres};
+use tower::ServiceBuilder;
 use tower_http::trace::TraceLayer;
+use tower_sessions::{cookie::time::Duration, Expiry, RedisStore, SessionManagerLayer};
 use uuid::Uuid;
-
-type AxumServer =
-    hyper::Server<hyper::server::conn::AddrIncoming, axum::routing::IntoMakeService<Router>>;
 
 use crate::{
     configuration::{DatabaseSettings, Settings},
     email_client::EmailClient,
     routes::{
-        health_check, home, login, login_form, publish_newsletter, subscribe, subscribtion_confirm,
+        admin_dashboard, health_check, home, login, login_form, publish_newsletter, subscribe,
+        subscribtion_confirm,
     },
 };
+
+type AxumServer =
+    hyper::Server<hyper::server::conn::AddrIncoming, axum::routing::IntoMakeService<Router>>;
 
 pub struct Application {
     local_addr: SocketAddr,
     server: AxumServer,
+    redis_handle: ConnectHandle,
 }
 
 impl Application {
@@ -44,6 +55,11 @@ impl Application {
         let addr = format!("{}:{}", config.app.host, config.app.port);
         let listener = std::net::TcpListener::bind(addr).context("Unable to bind to a socket")?;
         let local_addr = listener.local_addr()?;
+        let redis_confgi = RedisConfig::from_url(config.redis_uri.expose_secret())
+            .expect("Failed to create redis settings");
+        let redis_client = RedisClient::new(redis_confgi, None, None, None);
+        let redis_handle = redis_client.connect();
+        redis_client.wait_for_connect().await?;
         tracing::info!("Listening on {}", &local_addr);
         let server = build_server(
             listener,
@@ -51,8 +67,13 @@ impl Application {
             email_client,
             config.app.base_url,
             &config.app.hmac_secret,
+            redis_client,
         )?;
-        Ok(Application { local_addr, server })
+        Ok(Application {
+            local_addr,
+            server,
+            redis_handle,
+        })
     }
 
     pub fn port(&self) -> u16 {
@@ -63,8 +84,10 @@ impl Application {
         self.local_addr.ip()
     }
 
-    pub async fn run_forever(self) -> Result<(), hyper::Error> {
-        self.server.await
+    pub async fn run_forever(self) -> Result<(), anyhow::Error> {
+        self.server.await?;
+        self.redis_handle.await??;
+        Ok(())
     }
 }
 
@@ -91,7 +114,7 @@ struct AppState {
     conn: PgPool,
     email_client: EmailClient,
     base_url: ApplicationBaseUrl,
-    key: Key,
+    flash_config: axum_flash::Config,
 }
 
 fn build_server(
@@ -100,7 +123,19 @@ fn build_server(
     email_client: EmailClient,
     base_url: String,
     secret: &[u8],
+    redis_client: RedisClient,
 ) -> Result<AxumServer, hyper::Error> {
+    let session_store = RedisStore::new(redis_client);
+    let session_service = ServiceBuilder::new()
+        .layer(HandleErrorLayer::new(|_: BoxError| async {
+            StatusCode::BAD_REQUEST
+        }))
+        .layer(
+            SessionManagerLayer::new(session_store)
+                .with_secure(true)
+                .with_expiry(Expiry::OnInactivity(Duration::minutes(10))),
+        );
+
     let app = Router::new()
         .route("/health_check", get(health_check))
         .route("/subsriptions", post(subscribe))
@@ -108,12 +143,14 @@ fn build_server(
         .route("/newsletters", post(publish_newsletter))
         .route("/home", get(home))
         .route("/login", get(login_form).post(login))
+        .route("/admin/dashboard", get(admin_dashboard) )
+        .layer(session_service)
         .layer(
             TraceLayer::new_for_http().make_span_with(|_req: &Request<Body>| {
                 tracing::debug_span!("http-request", request_id = %Uuid::new_v4())
             }),
         )
-        .with_state(AppState{conn, email_client, base_url: ApplicationBaseUrl(base_url), key: Key::derive_from(secret)});
+        .with_state(AppState{conn, email_client, base_url: ApplicationBaseUrl(base_url), flash_config: axum_flash::Config::new(Key::derive_from(secret))});
     let server = axum::Server::from_tcp(listener)?.serve(app.into_make_service());
     Ok(server)
 }

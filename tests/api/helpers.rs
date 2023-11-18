@@ -142,6 +142,17 @@ impl TestApp {
             .await
             .unwrap()
     }
+
+    pub async fn get_admin_dashboard(&self) -> String {
+        self.api_client
+            .get(format!("{}/admin/dashboard", &self.addr))
+            .send()
+            .await
+            .expect("Failed to send request")
+            .text()
+            .await
+            .unwrap()
+    }
 }
 
 pub async fn configure_db(config: &DatabaseSettings) -> PgPool {

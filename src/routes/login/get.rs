@@ -1,13 +1,10 @@
 use axum::response::{Html, IntoResponse, Response};
-use axum_extra::extract::{cookie::Cookie, SignedCookieJar};
+use axum_flash::IncomingFlashes;
 
-pub async fn login_form(mut jar: SignedCookieJar) -> Response {
-    let error_html: String = match jar.get("_flash") {
+pub async fn login_form(flashes: IncomingFlashes) -> Response {
+    let error_html: String = match flashes.into_iter().next() {
         None => "".into(),
-        Some(cookie) => {
-            jar = jar.remove(Cookie::named("_flash"));
-            format!("<p><i>{}</i></p>", cookie.value())
-        }
+        Some((_, text)) => format!("<p><i>{}</i></p>", text),
     };
 
     let resp = Html(format!(
@@ -35,5 +32,5 @@ pub async fn login_form(mut jar: SignedCookieJar) -> Response {
 
 </html>"#,
     ));
-    (jar, resp).into_response()
+    (flashes, resp).into_response()
 }

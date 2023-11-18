@@ -1,8 +1,13 @@
-use axum::{extract::State, response::Redirect, Form};
-use axum_extra::extract::{cookie::Cookie, SignedCookieJar};
+use axum::{
+    extract::State,
+    response::{ErrorResponse, IntoResponse, Redirect},
+    Form,
+};
+use axum_flash::Flash;
 use secrecy::Secret;
 use serde::Deserialize;
 use sqlx::PgPool;
+use tower_sessions::Session;
 
 use crate::{
     authentication::{validate_credentials, Credentials},
@@ -16,12 +21,13 @@ pub struct FormData {
 }
 
 #[tracing::instrument(
-    skip(form, pool),
+    skip(form, pool, flash, session),
     fields(username=tracing::field::Empty, user_id=tracing::field::Empty)
 )]
 pub async fn login(
     State(pool): State<PgPool>,
-    jar: SignedCookieJar,
+    session: Session,
+    flash: Flash,
     Form(form): Form<FormData>,
 ) -> axum::response::Result<Redirect> {
     let credentials = Credentials {
@@ -33,12 +39,21 @@ pub async fn login(
     match validate_credentials(credentials, &pool).await {
         Ok(user_id) => {
             tracing::Span::current().record("user_id", &tracing::field::display(&user_id));
-            Ok(Redirect::to("/home"))
+            session.cycle_id();
+            session
+                .insert("user_id", user_id)
+                .map_err(|e| login_redirect(LoginError::UnexpectedError(e.into()), flash))?;
+            Ok(Redirect::to("/admin/dashboard"))
         }
         Err(e) => {
             let e: LoginError = e.into();
-            let jar = jar.add(Cookie::new("_flash", e.to_string()));
-            Err((jar, Redirect::to("/login")))?
+            Err(login_redirect(e, flash))
         }
     }
+}
+
+fn login_redirect(e: LoginError, flash: Flash) -> ErrorResponse {
+    (flash.error(e.to_string()), Redirect::to("/login"))
+        .into_response()
+        .into()
 }
