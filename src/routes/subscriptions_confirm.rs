@@ -13,13 +13,13 @@ pub struct QueryParams {
 }
 
 #[tracing::instrument(name = "Confirm a pending subscriber", skip(pool, params))]
-pub async fn subscribtion_confirm(
+pub async fn subscription_confirm(
     State(pool): State<PgPool>,
     Query(params): Query<QueryParams>,
 ) -> Result<StatusCode, PublishError> {
     let id = get_subscriber_id_by_token(&pool, &params.subscription_token)
         .await
-        .context("Failed to aquire connection from the db pool")?;
+        .context("Failed to acquire connection from the db pool")?;
     match id {
         None => return Ok(StatusCode::UNAUTHORIZED),
         Some(subscriber_id) => confirm_subscriber(&pool, subscriber_id)

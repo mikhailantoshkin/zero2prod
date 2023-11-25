@@ -3,12 +3,12 @@ use std::fmt::Display;
 use serde::Deserialize;
 use unicode_segmentation::UnicodeSegmentation;
 
-const FORBIDEN_CHARS: [char; 9] = ['/', '(', ')', '"', '<', '>', '\\', '{', '}'];
+const FORBIDDEN_CHARS: [char; 9] = ['/', '(', ')', '"', '<', '>', '\\', '{', '}'];
 
 pub enum NameValidationError {
     TooLong,
-    Empy,
-    FrobidenCharecter,
+    Empty,
+    ForbiddenCharacter,
 }
 
 impl Display for NameValidationError {
@@ -17,8 +17,8 @@ impl Display for NameValidationError {
             f,
             "Invalid name: {}",
             match self {
-                NameValidationError::Empy => "name is empty",
-                NameValidationError::FrobidenCharecter => "name contains forbidden character",
+                NameValidationError::Empty => "name is empty",
+                NameValidationError::ForbiddenCharacter => "name contains forbidden character",
                 NameValidationError::TooLong => "name is too long",
             }
         )
@@ -32,13 +32,13 @@ pub struct SubscriberName(String);
 impl SubscriberName {
     pub fn parse(s: String) -> Result<SubscriberName, NameValidationError> {
         if s.trim().is_empty() {
-            return Err(NameValidationError::Empy);
+            return Err(NameValidationError::Empty);
         }
         if s.graphemes(true).count() > 256 {
             return Err(NameValidationError::TooLong);
         }
-        if s.chars().any(|g| FORBIDEN_CHARS.contains(&g)) {
-            return Err(NameValidationError::FrobidenCharecter);
+        if s.chars().any(|g| FORBIDDEN_CHARS.contains(&g)) {
+            return Err(NameValidationError::ForbiddenCharacter);
         }
         Ok(Self(s))
     }
@@ -68,7 +68,7 @@ impl Display for SubscriberName {
 
 #[cfg(test)]
 mod tests {
-    use crate::domain::subscriber_name::{NameValidationError, SubscriberName, FORBIDEN_CHARS};
+    use crate::domain::subscriber_name::{NameValidationError, SubscriberName, FORBIDDEN_CHARS};
 
     #[test]
     fn a_256_grapheme_name_is_valid() {
@@ -83,20 +83,20 @@ mod tests {
         )
     }
     #[test]
-    fn witespace_name_is_invalid() {
+    fn whitespace_name_is_invalid() {
         let name = " ".to_string();
-        assert!(SubscriberName::parse(name).is_err_and(|x| matches!(x, NameValidationError::Empy)))
+        assert!(SubscriberName::parse(name).is_err_and(|x| matches!(x, NameValidationError::Empty)))
     }
     #[test]
-    fn empyt_name_is_invalid() {
+    fn empty_name_is_invalid() {
         let name = "".to_string();
-        assert!(SubscriberName::parse(name).is_err_and(|x| matches!(x, NameValidationError::Empy)))
+        assert!(SubscriberName::parse(name).is_err_and(|x| matches!(x, NameValidationError::Empty)))
     }
     #[test]
-    fn name_with_invallid_chars_is_rejected() {
-        for name in FORBIDEN_CHARS {
+    fn name_with_invalid_chars_is_rejected() {
+        for name in FORBIDDEN_CHARS {
             assert!(SubscriberName::parse(name.to_string())
-                .is_err_and(|x| matches!(x, NameValidationError::FrobidenCharecter)))
+                .is_err_and(|x| matches!(x, NameValidationError::ForbiddenCharacter)))
         }
     }
     #[test]

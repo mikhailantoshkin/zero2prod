@@ -41,7 +41,7 @@ pub async fn login(
             tracing::Span::current().record("user_id", &tracing::field::display(&user_id));
             session.renew();
             session
-                .inster_user_id(user_id)
+                .insert_user_id(user_id)
                 .map_err(|e| login_redirect(LoginError::UnexpectedError(e.into()), flash))?;
             Ok(Redirect::to("/admin/dashboard"))
         }

@@ -13,7 +13,7 @@ impl TypedSession {
         self.0.cycle_id();
     }
 
-    pub fn inster_user_id(&self, user_id: Uuid) -> Result<(), tower_sessions::session::Error> {
+    pub fn insert_user_id(&self, user_id: Uuid) -> Result<(), tower_sessions::session::Error> {
         self.0.insert(Self::USER_ID_KEY, user_id)
     }
 

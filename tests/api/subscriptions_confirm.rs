@@ -6,7 +6,7 @@ use wiremock::{
 use crate::helpers::spawn_app;
 
 #[tokio::test]
-async fn subsribe_confirm_without_token_is_rejected() {
+async fn subscribe_confirm_without_token_is_rejected() {
     let app = spawn_app().await;
     let resp = reqwest::get(format!("{}/subscriptions/confirm", app.addr))
         .await

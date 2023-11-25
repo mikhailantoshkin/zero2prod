@@ -90,7 +90,7 @@ impl TryFrom<String> for Environment {
             "local" => Ok(Environment::Local),
             "production" => Ok(Environment::Production),
             other => Err(format!(
-                "Unsupported environment type: {}. Use `local` or `porduction`",
+                "Unsupported environment type: {}. Use `local` or `production`",
                 other
             )),
         }
@@ -123,7 +123,7 @@ pub fn get_config() -> Result<Settings, config::ConfigError> {
     let environment: Environment = std::env::var("APP_ENVIRONMENT")
         .unwrap_or_else(|_| "local".into())
         .try_into()
-        .expect("Failed to parse API_EVIRONMENT");
+        .expect("Failed to parse API_ENVIRONMENT");
     let config_dir: PathBuf = std::env::var("CONFIG_DIR")
         .unwrap_or_else(|_| match environment {
             Environment::Local => "configuration".into(),

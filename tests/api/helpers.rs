@@ -81,7 +81,7 @@ pub struct TestApp {
 impl TestApp {
     pub async fn post_subscription(&self, body: String) -> reqwest::Response {
         self.api_client
-            .post(format!("{}/subsriptions", self.addr))
+            .post(format!("{}/subscriptions", self.addr))
             .header("Content-Type", "application/x-www-form-urlencoded")
             .body(body)
             .timeout(Duration::from_secs(2))
@@ -211,7 +211,7 @@ pub async fn spawn_app() -> TestApp {
     test_app
 }
 
-pub fn assert_is_rederected_to(response: &reqwest::Response, location: &str) {
+pub fn assert_is_redirected_to(response: &reqwest::Response, location: &str) {
     assert_eq!(response.status().as_u16(), 303);
     assert_eq!(response.headers().get("Location").unwrap(), location);
 }

@@ -49,7 +49,7 @@ pub async fn validate_credentials(
     .await
     .context("Failed to spawn blocking task.")
     .map_err(AuthError::UnexpectedError)??;
-    user_id.ok_or_else(|| AuthError::InvalidCredentials(anyhow::anyhow!("Uknown username.")))
+    user_id.ok_or_else(|| AuthError::InvalidCredentials(anyhow::anyhow!("Unknown username.")))
 }
 
 #[tracing::instrument(name = "Verify password hash", skip(password_hash, password_candidate))]
@@ -73,7 +73,7 @@ fn verify_password_hash(
 async fn get_stored_credentials(
     username: &str,
     pool: &PgPool,
-) -> Result<Option<(uuid::Uuid, Secret<String>)>, anyhow::Error> {
+) -> Result<Option<(Uuid, Secret<String>)>, anyhow::Error> {
     let row = sqlx::query!(
         r#"
         SELECT user_id, password_hash
@@ -84,7 +84,7 @@ async fn get_stored_credentials(
     )
     .fetch_optional(pool)
     .await
-    .context("Failed to retreieve stored creds")
+    .context("Failed to retrieve stored creds")
     .map_err(AuthError::UnexpectedError)?
     .map(|row| (row.user_id, Secret::new(row.password_hash)));
     Ok(row)

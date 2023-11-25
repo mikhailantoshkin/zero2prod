@@ -31,7 +31,7 @@ pub async fn subscribe(
         .begin()
         .await
         .context("Failed to acquire a Postgres connection from the pool")?;
-    let subscriber_id = inster_subscriber(&mut transaction, &subscriber)
+    let subscriber_id = insert_subscriber(&mut transaction, &subscriber)
         .await
         .context("Failed to insert new subscriber")?;
     let token = generate_subscription_token();
@@ -52,7 +52,7 @@ pub async fn subscribe(
     name = "Saving new subscriber to database",
     skip(transaction, subscriber)
 )]
-pub async fn inster_subscriber(
+pub async fn insert_subscriber(
     transaction: &mut Transaction<'_, Postgres>,
     subscriber: &NewSubscriber,
 ) -> Result<Uuid, sqlx::Error> {

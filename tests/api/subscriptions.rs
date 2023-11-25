@@ -6,7 +6,7 @@ use wiremock::{
 use crate::helpers::spawn_app;
 
 #[tokio::test]
-async fn test_subscribtion_200() {
+async fn test_subscription_200() {
     let test_app = spawn_app().await;
 
     let body = "name=le%20guin&email=ursula_le_guin%40gmail.com";
@@ -45,7 +45,7 @@ async fn test_subscription_persists_subscriber() {
 }
 
 #[tokio::test]
-async fn test_422_on_bad_requestr() {
+async fn test_422_on_bad_request() {
     let test_app = spawn_app().await;
     let cases = vec![
         ("name=le%20guin", "missing the email"),
@@ -85,7 +85,7 @@ async fn test_422_on_bad_name() {
 }
 
 #[tokio::test]
-async fn susbcribe_sends_conformation_email_on_valid_request() {
+async fn subscribe_sends_conformation_email_on_valid_request() {
     let app = spawn_app().await;
     let body = "name=le%20guin&email=ursula_le_guin%40gmail.com";
     Mock::given(path("/email"))
@@ -118,7 +118,7 @@ async fn subscribe_sends_a_confirmation_email_with_a_link() {
 }
 
 #[tokio::test]
-async fn subscribe_failes_if_there_is_fatal_db_error() {
+async fn subscribe_fails_if_there_is_fatal_db_error() {
     let app = spawn_app().await;
     let body = "name=le%20guin&email=ursula_le_guin%40gmail.com";
 

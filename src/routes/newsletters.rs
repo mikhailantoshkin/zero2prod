@@ -56,7 +56,7 @@ pub async fn publish_newsletter(
                 tracing::warn!(
                     error.cause_chain = ?error,
                     "Skipping a confirmed subscriber. \
-                    Teir stored contact details are invalid",
+                    Their stored contact details are invalid",
                 )
             }
         }
@@ -75,7 +75,7 @@ fn basic_auth(headers: &HeaderMap) -> Result<Credentials, anyhow::Error> {
         .context("Auth header is not UTF-8")?;
     let b64_segment = header_val
         .strip_prefix("Basic ")
-        .context("Auth is not Basi")?;
+        .context("Auth is not Basic")?;
     let decoded = base64::decode(b64_segment).context("Unable to decode Basic creds")?;
     let decoded_creds = String::from_utf8(decoded).context("Credentials are not valid UTF8")?;
     let mut credentials = decoded_creds.splitn(2, ':');

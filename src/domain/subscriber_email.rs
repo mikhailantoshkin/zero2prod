@@ -53,7 +53,7 @@ mod tests {
     }
 
     #[test]
-    fn emtpy_email_is_rejected() {
+    fn empty_email_is_rejected() {
         let email = "".to_string();
         assert!(SubscriberEmail::parse(email).is_err())
     }

@@ -1,4 +1,16 @@
-use crate::helpers::{assert_is_rederected_to, spawn_app};
+use crate::helpers::{assert_is_redirected_to, spawn_app};
+
+#[tokio::test]
+async fn redirection_on_error() {
+    let app = spawn_app().await;
+
+    let login_body = serde_json::json!({
+        "username": "name",
+        "password": "pass"
+    });
+    let response = app.post_login(&login_body).await;
+    assert_is_redirected_to(&response, "/login")
+}
 
 #[tokio::test]
 async fn an_error_flash_message_is_set_on_failure() {
@@ -9,19 +21,7 @@ async fn an_error_flash_message_is_set_on_failure() {
         "password": "pass"
     });
     let response = app.post_login(&login_body).await;
-    assert_is_rederected_to(&response, "/login")
-}
-
-#[tokio::test]
-async fn an_error_flas_message_is_set_on_failure() {
-    let app = spawn_app().await;
-
-    let login_body = serde_json::json!({
-        "username": "name",
-        "password": "pass"
-    });
-    let response = app.post_login(&login_body).await;
-    assert_is_rederected_to(&response, "/login");
+    assert_is_redirected_to(&response, "/login");
 
     let html_page = app.get_login_html().await;
     assert!(html_page.contains(r#"<p><i>Authentication failed</i></p>"#));
@@ -40,7 +40,7 @@ async fn redirect_to_admin_dashboard_after_login_success() {
     });
     let response = app.post_login(&login_body).await;
     assert!(!response.headers().is_empty());
-    assert_is_rederected_to(&response, "/admin/dashboard");
+    assert_is_redirected_to(&response, "/admin/dashboard");
 
     let html_page = app
         .get_admin_dashboard()

@@ -30,7 +30,7 @@ use crate::{
     email_client::EmailClient,
     routes::{
         admin_dashboard, health_check, home, login, login_form, publish_newsletter, subscribe,
-        subscribtion_confirm,
+        subscription_confirm,
     },
 };
 
@@ -55,9 +55,9 @@ impl Application {
         let addr = format!("{}:{}", config.app.host, config.app.port);
         let listener = std::net::TcpListener::bind(addr).context("Unable to bind to a socket")?;
         let local_addr = listener.local_addr()?;
-        let redis_confgi = RedisConfig::from_url(config.redis_uri.expose_secret())
+        let redis_config = RedisConfig::from_url(config.redis_uri.expose_secret())
             .expect("Failed to create redis settings");
-        let redis_client = RedisClient::new(redis_confgi, None, None, None);
+        let redis_client = RedisClient::new(redis_config, None, None, None);
         let redis_handle = redis_client.connect();
         redis_client.wait_for_connect().await?;
         tracing::info!("Listening on {}", &local_addr);
@@ -138,8 +138,8 @@ fn build_server(
 
     let app = Router::new()
         .route("/health_check", get(health_check))
-        .route("/subsriptions", post(subscribe))
-        .route("/subscriptions/confirm", get(subscribtion_confirm))
+        .route("/subscriptions", post(subscribe))
+        .route("/subscriptions/confirm", get(subscription_confirm))
         .route("/newsletters", post(publish_newsletter))
         .route("/home", get(home))
         .route("/login", get(login_form).post(login))
