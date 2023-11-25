@@ -143,15 +143,12 @@ impl TestApp {
             .unwrap()
     }
 
-    pub async fn get_admin_dashboard(&self) -> String {
+    pub async fn get_admin_dashboard(&self) -> reqwest::Response {
         self.api_client
             .get(format!("{}/admin/dashboard", &self.addr))
             .send()
             .await
             .expect("Failed to send request")
-            .text()
-            .await
-            .unwrap()
     }
 }
 
@@ -212,4 +209,9 @@ pub async fn spawn_app() -> TestApp {
     };
     test_app.test_user.store(&test_app.pool).await;
     test_app
+}
+
+pub fn assert_is_rederected_to(response: &reqwest::Response, location: &str) {
+    assert_eq!(response.status().as_u16(), 303);
+    assert_eq!(response.headers().get("Location").unwrap(), location);
 }

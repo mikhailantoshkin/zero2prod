@@ -1,22 +1,27 @@
 use anyhow::Context;
-use axum::{extract::State, http::StatusCode, response::Html};
+use axum::{
+    extract::State,
+    http::StatusCode,
+    response::{Html, IntoResponse, Redirect, Response},
+};
 use sqlx::PgPool;
-use tower_sessions::Session;
 use uuid::Uuid;
+
+use crate::session_state::TypedSession;
 
 pub async fn admin_dashboard(
     State(pool): State<PgPool>,
-    session: Session,
-) -> axum::response::Result<Html<String>> {
+    session: TypedSession,
+) -> axum::response::Result<Response> {
     let username = if let Some(user_id) = session
-        .get::<Uuid>("user_id")
+        .get_user_id()
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
     {
         get_username(user_id, &pool)
             .await
             .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
     } else {
-        todo!()
+        return Ok(Redirect::to("/login").into_response());
     };
     Ok(Html(format!(
         r#"<!DOCTYPE html>
@@ -29,7 +34,8 @@ pub async fn admin_dashboard(
     <p>Welcome {username}!</p>
 </body>
 </html>"#
-    )))
+    ))
+    .into_response())
 }
 
 #[tracing::instrument(name = "Get username", skip(pool))]

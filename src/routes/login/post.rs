@@ -7,11 +7,11 @@ use axum_flash::Flash;
 use secrecy::Secret;
 use serde::Deserialize;
 use sqlx::PgPool;
-use tower_sessions::Session;
 
 use crate::{
     authentication::{validate_credentials, Credentials},
     routes::error_handlers::LoginError,
+    session_state::TypedSession,
 };
 
 #[derive(Deserialize)]
@@ -26,7 +26,7 @@ pub struct FormData {
 )]
 pub async fn login(
     State(pool): State<PgPool>,
-    session: Session,
+    session: TypedSession,
     flash: Flash,
     Form(form): Form<FormData>,
 ) -> axum::response::Result<Redirect> {
@@ -39,9 +39,9 @@ pub async fn login(
     match validate_credentials(credentials, &pool).await {
         Ok(user_id) => {
             tracing::Span::current().record("user_id", &tracing::field::display(&user_id));
-            session.cycle_id();
+            session.renew();
             session
-                .insert("user_id", user_id)
+                .inster_user_id(user_id)
                 .map_err(|e| login_redirect(LoginError::UnexpectedError(e.into()), flash))?;
             Ok(Redirect::to("/admin/dashboard"))
         }

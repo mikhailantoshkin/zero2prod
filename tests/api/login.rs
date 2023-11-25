@@ -1,9 +1,4 @@
-use crate::helpers::spawn_app;
-
-pub fn assert_is_rederected_to(response: &reqwest::Response, location: &str) {
-    assert_eq!(response.status().as_u16(), 303);
-    assert_eq!(response.headers().get("Location").unwrap(), location);
-}
+use crate::helpers::{assert_is_rederected_to, spawn_app};
 
 #[tokio::test]
 async fn an_error_flash_message_is_set_on_failure() {
@@ -47,6 +42,11 @@ async fn redirect_to_admin_dashboard_after_login_success() {
     assert!(!response.headers().is_empty());
     assert_is_rederected_to(&response, "/admin/dashboard");
 
-    let html_page = app.get_admin_dashboard().await;
+    let html_page = app
+        .get_admin_dashboard()
+        .await
+        .text()
+        .await
+        .expect("Unable to get html body from response");
     assert!(html_page.contains(&format!("Welcome {}", app.test_user.username)));
 }

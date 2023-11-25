@@ -65,7 +65,7 @@ fn verify_password_hash(
             password_candidate.expose_secret().as_bytes(),
             &expected_password_hash,
         )
-        .context("Ivalid password")
+        .context("Invalid password")
         .map_err(AuthError::InvalidCredentials)
 }
 
