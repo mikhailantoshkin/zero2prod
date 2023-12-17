@@ -5,6 +5,7 @@ use std::{
 
 use anyhow::Context;
 use axum::{
+    body::Body,
     error_handling::HandleErrorLayer,
     extract::FromRef,
     http::StatusCode,
@@ -17,9 +18,10 @@ use fred::{
     interfaces::ClientLike,
     types::{ConnectHandle, RedisConfig},
 };
-use hyper::{Body, Request};
+use hyper::Request;
 use secrecy::{ExposeSecret, Secret};
 use sqlx::{PgPool, Pool, Postgres};
+use tokio::net::TcpListener;
 use tower::ServiceBuilder;
 use tower_http::trace::TraceLayer;
 use tower_sessions::{cookie::time::Duration, Expiry, RedisStore, SessionManagerLayer};
@@ -34,12 +36,9 @@ use crate::{
     },
 };
 
-type AxumServer =
-    hyper::Server<hyper::server::conn::AddrIncoming, axum::routing::IntoMakeService<Router>>;
-
 pub struct Application {
     local_addr: SocketAddr,
-    server: AxumServer,
+    server: Server,
     redis_handle: ConnectHandle,
 }
 
@@ -53,7 +52,9 @@ impl Application {
             config.email_client.timeout_millis,
         );
         let addr = format!("{}:{}", config.app.host, config.app.port);
-        let listener = std::net::TcpListener::bind(addr).context("Unable to bind to a socket")?;
+        let listener = TcpListener::bind(addr)
+            .await
+            .context("Unable to bind to a socket")?;
         let local_addr = listener.local_addr()?;
         let redis_config = RedisConfig::from_url(config.redis_uri.expose_secret())
             .expect("Failed to create redis settings");
@@ -85,7 +86,7 @@ impl Application {
     }
 
     pub async fn run_forever(self) -> Result<(), anyhow::Error> {
-        self.server.await?;
+        self.server.serve().await?;
         self.redis_handle.await??;
         Ok(())
     }
@@ -109,6 +110,20 @@ impl Deref for HmacSecret {
     }
 }
 
+struct Server {
+    listener: TcpListener,
+    app: Router,
+}
+impl Server {
+    pub fn new(listener: TcpListener, app: Router) -> Self {
+        Self { listener, app }
+    }
+
+    pub async fn serve(self) -> Result<(), std::io::Error> {
+        axum::serve(self.listener, self.app).await
+    }
+}
+
 #[derive(FromRef, Clone)]
 struct AppState {
     conn: PgPool,
@@ -118,13 +133,13 @@ struct AppState {
 }
 
 fn build_server(
-    listener: std::net::TcpListener,
+    listener: TcpListener,
     conn: PgPool,
     email_client: EmailClient,
     base_url: String,
     secret: &[u8],
     redis_client: RedisClient,
-) -> Result<AxumServer, hyper::Error> {
+) -> Result<Server, hyper::Error> {
     let session_store = RedisStore::new(redis_client);
     let session_service = ServiceBuilder::new()
         .layer(HandleErrorLayer::new(|_: BoxError| async {
@@ -151,6 +166,5 @@ fn build_server(
             }),
         )
         .with_state(AppState{conn, email_client, base_url: ApplicationBaseUrl(base_url), flash_config: axum_flash::Config::new(Key::derive_from(secret))});
-    let server = axum::Server::from_tcp(listener)?.serve(app.into_make_service());
-    Ok(server)
+    Ok(Server::new(listener, app))
 }
