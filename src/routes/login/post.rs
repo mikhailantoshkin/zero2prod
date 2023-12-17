@@ -1,17 +1,14 @@
 use axum::{
-    extract::State,
     response::{ErrorResponse, IntoResponse, Redirect},
     Form,
 };
 use axum_flash::Flash;
 use secrecy::Secret;
 use serde::Deserialize;
-use sqlx::PgPool;
 
 use crate::{
-    authentication::{validate_credentials, Credentials},
+    authentication::{AuthSession, Credentials},
     routes::error_handlers::LoginError,
-    session_state::TypedSession,
 };
 
 #[derive(Deserialize)]
@@ -21,12 +18,11 @@ pub struct FormData {
 }
 
 #[tracing::instrument(
-    skip(form, pool, flash, session),
+    skip(form, flash, session),
     fields(username=tracing::field::Empty, user_id=tracing::field::Empty)
 )]
 pub async fn login(
-    State(pool): State<PgPool>,
-    session: TypedSession,
+    mut session: AuthSession,
     flash: Flash,
     Form(form): Form<FormData>,
 ) -> axum::response::Result<Redirect> {
@@ -36,20 +32,20 @@ pub async fn login(
     };
     tracing::Span::current().record("username", &tracing::field::display(&credentials.username));
 
-    match validate_credentials(credentials, &pool).await {
-        Ok(user_id) => {
-            tracing::Span::current().record("user_id", &tracing::field::display(&user_id));
-            session.renew();
-            session
-                .insert_user_id(user_id)
-                .map_err(|e| login_redirect(LoginError::UnexpectedError(e.into()), flash))?;
-            Ok(Redirect::to("/admin/dashboard"))
+    let user = match session.authenticate(credentials).await {
+        Ok(Some(user)) => user,
+        Ok(None) => {
+            let err = LoginError::AuthError(anyhow::anyhow!("Unknown username."));
+            return Err(login_redirect(err, flash));
         }
-        Err(e) => {
-            let e: LoginError = e.into();
-            Err(login_redirect(e, flash))
-        }
-    }
+        Err(e) => return Err(login_redirect(LoginError::AuthError(e.into()), flash)),
+    };
+
+    session
+        .login(&user)
+        .await
+        .map_err(|e| LoginError::UnexpectedError(e.into()))?;
+    Ok(Redirect::to("/admin/dashboard"))
 }
 
 fn login_redirect(e: LoginError, flash: Flash) -> ErrorResponse {

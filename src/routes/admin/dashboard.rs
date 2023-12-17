@@ -1,28 +1,20 @@
 use anyhow::Context;
 use axum::{
-    extract::State,
     http::StatusCode,
-    response::{Html, IntoResponse, Redirect, Response},
+    response::{Html, IntoResponse, Response},
 };
 use sqlx::PgPool;
 use uuid::Uuid;
 
-use crate::session_state::TypedSession;
+use crate::authentication::AuthSession;
 
-pub async fn admin_dashboard(
-    State(pool): State<PgPool>,
-    session: TypedSession,
-) -> axum::response::Result<Response> {
-    let username = if let Some(user_id) = session
-        .get_user_id()
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
-    {
-        get_username(user_id, &pool)
-            .await
-            .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
+pub async fn admin_dashboard(session: AuthSession) -> axum::response::Result<Response> {
+    let username = if let Some(user) = session.user {
+        user.username
     } else {
-        return Ok(Redirect::to("/login").into_response());
+        return Err(StatusCode::INTERNAL_SERVER_ERROR.into_response().into());
     };
+
     Ok(Html(format!(
         r#"<!DOCTYPE html>
 <html lang="en">

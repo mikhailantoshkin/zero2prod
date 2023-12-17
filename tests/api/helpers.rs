@@ -150,6 +150,26 @@ impl TestApp {
             .await
             .expect("Failed to send request")
     }
+
+    pub async fn get_change_password(&self) -> reqwest::Response {
+        self.api_client
+            .get(format!("{}/admin/password", &self.addr))
+            .send()
+            .await
+            .expect("Failed to send request")
+    }
+
+    pub async fn post_change_password<Body>(&self, body: &Body) -> reqwest::Response
+    where
+        Body: serde::Serialize,
+    {
+        self.api_client
+            .post(&format!("{}/admin/password", self.addr))
+            .form(body)
+            .send()
+            .await
+            .expect("Failed to send request")
+    }
 }
 
 pub async fn configure_db(config: &DatabaseSettings) -> PgPool {

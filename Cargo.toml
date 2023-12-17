@@ -16,6 +16,7 @@ anyhow = { version = "1" }
 argon2 = { version = "0.5", features = ["std"] }
 axum = { version = "0.7", features = ["macros"] }
 axum-flash = "0.8"
+axum-login = "0.10"
 base16ct = { version = "0.2", features = ["alloc"] }
 base64 = "0.20"                                                                 # 0.21 has a nasty api
 chrono = { version = "0.4" }
@@ -53,7 +54,7 @@ default-features = false
 features = ["json", "rustls-tls", "cookies"]
 
 [dependencies.sqlx]
-version = "0.6"
+version = "0.7"
 default-features = false
 features = [
     "macros",
@@ -62,7 +63,6 @@ features = [
     "chrono",
     "migrate",
     "runtime-tokio-rustls",
-    "offline",
 ]
 
 [dev-dependencies]

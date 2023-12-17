@@ -48,5 +48,9 @@ async fn redirect_to_admin_dashboard_after_login_success() {
         .text()
         .await
         .expect("Unable to get html body from response");
-    assert!(html_page.contains(&format!("Welcome {}", app.test_user.username)));
+    assert!(
+        html_page.contains(&format!("Welcome {}", app.test_user.username)),
+        "data {}",
+        html_page
+    );
 }

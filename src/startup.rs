@@ -9,10 +9,12 @@ use axum::{
     error_handling::HandleErrorLayer,
     extract::FromRef,
     http::StatusCode,
+    middleware,
     routing::{get, post},
     BoxError, Router,
 };
 use axum_extra::extract::cookie::Key;
+use axum_login::AuthManagerLayerBuilder;
 use fred::{
     clients::RedisClient,
     interfaces::ClientLike,
@@ -28,11 +30,12 @@ use tower_sessions::{cookie::time::Duration, Expiry, RedisStore, SessionManagerL
 use uuid::Uuid;
 
 use crate::{
+    authentication::middleware::{auth_middleware, Backend},
     configuration::{DatabaseSettings, Settings},
     email_client::EmailClient,
     routes::{
-        admin_dashboard, health_check, home, login, login_form, publish_newsletter, subscribe,
-        subscription_confirm,
+        admin_dashboard, change_passord_form, change_password, health_check, home, login,
+        login_form, publish_newsletter, subscribe, subscription_confirm,
     },
 };
 
@@ -141,14 +144,23 @@ fn build_server(
     redis_client: RedisClient,
 ) -> Result<Server, hyper::Error> {
     let session_store = RedisStore::new(redis_client);
-    let session_service = ServiceBuilder::new()
+    let session_layer = SessionManagerLayer::new(session_store)
+        .with_secure(true)
+        .with_expiry(Expiry::OnInactivity(Duration::minutes(10)));
+
+    let backend = Backend::new(conn.clone());
+
+    let auth_service = ServiceBuilder::new()
         .layer(HandleErrorLayer::new(|_: BoxError| async {
             StatusCode::BAD_REQUEST
         }))
-        .layer(
-            SessionManagerLayer::new(session_store)
-                .with_secure(true)
-                .with_expiry(Expiry::OnInactivity(Duration::minutes(10))),
+        .layer(AuthManagerLayerBuilder::new(backend, session_layer).build());
+
+    let admin_router = Router::new()
+        .route("/admin/dashboard", get(admin_dashboard))
+        .route(
+            "/admin/password",
+            get(change_passord_form).post(change_password),
         );
 
     let app = Router::new()
@@ -158,8 +170,8 @@ fn build_server(
         .route("/newsletters", post(publish_newsletter))
         .route("/home", get(home))
         .route("/login", get(login_form).post(login))
-        .route("/admin/dashboard", get(admin_dashboard) )
-        .layer(session_service)
+        .merge(admin_router.route_layer(middleware::from_fn(auth_middleware)))
+        .layer(auth_service)
         .layer(
             TraceLayer::new_for_http().make_span_with(|_req: &Request<Body>| {
                 tracing::debug_span!("http-request", request_id = %Uuid::new_v4())

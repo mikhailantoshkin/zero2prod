@@ -5,7 +5,7 @@ use secrecy::Secret;
 use sqlx::PgPool;
 
 use super::error_handlers::PublishError;
-use crate::authentication::{validate_credentials, Credentials};
+use crate::authentication::{validate_credentials, AuthError, Credentials};
 use crate::{domain::SubscriberEmail, email_client::EmailClient};
 
 #[derive(serde::Deserialize)]
@@ -33,8 +33,11 @@ pub async fn publish_newsletter(
 ) -> Result<StatusCode, PublishError> {
     let creds = basic_auth(&headers).map_err(PublishError::AuthError)?;
     tracing::Span::current().record("username", &tracing::field::display(&creds.username));
-    let user_id = validate_credentials(creds, &pool).await?;
-    tracing::Span::current().record("user_id", &tracing::field::display(&user_id));
+    let user = validate_credentials(creds, &pool)
+        .await?
+        .ok_or_else(|| AuthError::InvalidCredentials(anyhow::anyhow!("Unknown username.")))?;
+
+    tracing::Span::current().record("user_id", &tracing::field::display(&user.user_id));
 
     let subscribers = get_confirmed_subscribers(&pool).await?;
     for subscriber in subscribers {
