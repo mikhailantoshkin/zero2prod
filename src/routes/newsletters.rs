@@ -5,7 +5,7 @@ use secrecy::Secret;
 use sqlx::PgPool;
 
 use super::error_handlers::PublishError;
-use crate::authentication::{validate_credentials, AuthError, Credentials};
+use crate::authentication::credentials::{validate_credentials, AuthError, Credentials};
 use crate::{domain::SubscriberEmail, email_client::EmailClient};
 
 #[derive(serde::Deserialize)]

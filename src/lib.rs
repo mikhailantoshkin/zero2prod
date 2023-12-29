@@ -4,6 +4,5 @@ pub mod domain;
 pub mod email_client;
 pub mod query;
 pub mod routes;
-pub mod session_state;
 pub mod startup;
 pub mod telemetry;

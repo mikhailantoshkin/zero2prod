@@ -1,5 +1,6 @@
 use anyhow::Context;
-use argon2::{Argon2, PasswordHash, PasswordVerifier};
+use argon2::password_hash::SaltString;
+use argon2::{Argon2, Params, PasswordHash, PasswordHasher, PasswordVerifier};
 
 use secrecy::ExposeSecret;
 use secrecy::Secret;
@@ -23,7 +24,7 @@ pub enum AuthError {
 pub struct User {
     pub user_id: Uuid,
     pub username: String,
-    password_hash: Secret<String>,
+    pub password_hash: Secret<String>,
 }
 
 #[derive(Clone)]
@@ -107,89 +108,55 @@ async fn get_stored_credentials(
     Ok(user)
 }
 
-pub mod middleware {
-    use axum::async_trait;
-    use axum::extract::Request;
-    use axum::middleware::Next;
-    use axum::response::IntoResponse;
-    use axum::response::Redirect;
-    use axum::response::Response;
-    use axum_login::AuthUser;
-    use axum_login::AuthnBackend;
-    use axum_login::UserId;
-    use sqlx::PgPool;
-    use uuid::Uuid;
-
-    use super::*;
-
-    impl AuthUser for User {
-        type Id = Uuid;
-
-        fn id(&self) -> Self::Id {
-            self.user_id
-        }
-
-        fn session_auth_hash(&self) -> &[u8] {
-            self.password_hash.expose_secret().as_bytes()
-        }
-    }
-
-    #[derive(Debug, Clone)]
-    pub struct Backend {
-        db: PgPool,
-    }
-
-    impl Backend {
-        pub fn new(db: PgPool) -> Self {
-            Self { db }
-        }
-    }
-
-    #[async_trait]
-    impl AuthnBackend for Backend {
-        type User = User;
-        type Credentials = Credentials;
-        type Error = AuthError;
-
-        async fn authenticate(
-            &self,
-            creds: Self::Credentials,
-        ) -> Result<Option<Self::User>, Self::Error> {
-            validate_credentials(creds, &self.db).await
-        }
-        async fn get_user(
-            &self,
-            user_id: &UserId<Self>,
-        ) -> Result<Option<Self::User>, Self::Error> {
-            let user = sqlx::query_as!(
-                User,
-                r#"
-        SELECT *
-        FROM users
-        WHERE user_id = $1
+#[tracing::instrument(name = "Change password", skip(password, pool))]
+pub async fn change_password(
+    user_id: Uuid,
+    password: Secret<String>,
+    pool: &PgPool,
+) -> Result<(), anyhow::Error> {
+    let password_hash = spawn_blocking_with_tracing(move || compute_password_hash(password))
+        .await?
+        .context("Failed to hash password")?;
+    sqlx::query!(
+        r#"
+        UPDATE users
+        SET password_hash = $1
+        WHERE user_id = $2
         "#,
-                user_id,
-            )
-            .fetch_optional(&self.db)
-            .await
-            .context("Failed to retrieve stored creds")
-            .map_err(AuthError::UnexpectedError)?;
-
-            Ok(user)
-        }
-    }
-
-    pub async fn auth_middleware(
-        auth_session: AuthSession,
-        request: Request,
-        next: Next,
-    ) -> Response {
-        if auth_session.user.is_some() {
-            next.run(request).await
-        } else {
-            Redirect::to("/login").into_response()
-        }
-    }
+        password_hash.expose_secret(),
+        user_id
+    )
+    .execute(pool)
+    .await
+    .context("Failed to change users's password in the database.")?;
+    Ok(())
 }
 
-pub type AuthSession = axum_login::AuthSession<middleware::Backend>;
+fn compute_password_hash(password: Secret<String>) -> Result<Secret<String>, anyhow::Error> {
+    let salt = SaltString::generate(&mut rand::thread_rng());
+    let password_hash = Argon2::new(
+        argon2::Algorithm::Argon2d,
+        argon2::Version::V0x13,
+        Params::new(150000, 2, 1, None).unwrap(),
+    )
+    .hash_password(password.expose_secret().as_bytes(), &salt)?
+    .to_string();
+    Ok(Secret::new(password_hash))
+}
+
+#[non_exhaustive]
+#[derive(thiserror::Error, Debug)]
+pub enum ValidationError {
+    #[error("Password has to be at least 12 symbols long.")]
+    ToShort,
+    #[error("Password can not be longer than 128 symblols.")]
+    ToLong,
+}
+
+pub fn validate_password(password: &str) -> Result<(), ValidationError> {
+    match password.len() {
+        v if v < 12 => Err(ValidationError::ToShort),
+        v if v > 128 => Err(ValidationError::ToLong),
+        _ => Ok(()),
+    }
+}

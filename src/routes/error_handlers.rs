@@ -1,12 +1,14 @@
 use std::fmt::Debug;
 
-use crate::authentication::AuthError;
+use crate::authentication::credentials::AuthError;
 use crate::domain::NameValidationError;
 use axum::http::header;
 use axum::http::HeaderValue;
 use axum::http::StatusCode;
 use axum::response::IntoResponse;
 use axum::response::Redirect;
+use axum::response::Response;
+use axum_flash::Flash;
 use hyper::HeaderMap;
 
 impl IntoResponse for NameValidationError {
@@ -98,4 +100,8 @@ pub fn error_chain_fmt(
         current = cause.source();
     }
     Ok(())
+}
+
+pub fn flash_redirect(msg: &str, path: &str, flash: Flash) -> Response {
+    (flash.error(msg), Redirect::to(path)).into_response()
 }

@@ -7,7 +7,7 @@ use anyhow::Context;
 use axum::{
     body::Body,
     error_handling::HandleErrorLayer,
-    extract::FromRef,
+    extract::{FromRef, MatchedPath},
     http::StatusCode,
     middleware,
     routing::{get, post},
@@ -34,7 +34,7 @@ use crate::{
     configuration::{DatabaseSettings, Settings},
     email_client::EmailClient,
     routes::{
-        admin_dashboard, change_passord_form, change_password, health_check, home, login,
+        admin_dashboard, change_passord_form, change_password, health_check, home, log_out, login,
         login_form, publish_newsletter, subscribe, subscription_confirm,
     },
 };
@@ -161,7 +161,16 @@ fn build_server(
         .route(
             "/admin/password",
             get(change_passord_form).post(change_password),
-        );
+        )
+        .route("/admin/logout", post(log_out));
+
+    let tracig_layer = TraceLayer::new_for_http().make_span_with(|req: &Request<Body>| {
+                let method = req.method();
+                let uri = req.uri();
+                let matched_path = req.extensions().get::<MatchedPath>().map(|p| p.as_str());
+
+                tracing::debug_span!("http-request", %method, %uri, matched_path, request_id = %Uuid::new_v4())
+            });
 
     let app = Router::new()
         .route("/health_check", get(health_check))
@@ -172,11 +181,12 @@ fn build_server(
         .route("/login", get(login_form).post(login))
         .merge(admin_router.route_layer(middleware::from_fn(auth_middleware)))
         .layer(auth_service)
-        .layer(
-            TraceLayer::new_for_http().make_span_with(|_req: &Request<Body>| {
-                tracing::debug_span!("http-request", request_id = %Uuid::new_v4())
-            }),
-        )
-        .with_state(AppState{conn, email_client, base_url: ApplicationBaseUrl(base_url), flash_config: axum_flash::Config::new(Key::derive_from(secret))});
+        .layer(tracig_layer)
+        .with_state(AppState {
+            conn,
+            email_client,
+            base_url: ApplicationBaseUrl(base_url),
+            flash_config: axum_flash::Config::new(Key::derive_from(secret)),
+        });
     Ok(Server::new(listener, app))
 }

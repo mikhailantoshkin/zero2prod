@@ -151,6 +151,9 @@ impl TestApp {
             .expect("Failed to send request")
     }
 
+    pub async fn get_admin_dashboard_html(&self) -> String {
+        self.get_admin_dashboard().await.text().await.unwrap()
+    }
     pub async fn get_change_password(&self) -> reqwest::Response {
         self.api_client
             .get(format!("{}/admin/password", &self.addr))
@@ -166,6 +169,31 @@ impl TestApp {
         self.api_client
             .post(&format!("{}/admin/password", self.addr))
             .form(body)
+            .send()
+            .await
+            .expect("Failed to send request")
+    }
+
+    pub async fn login(&self, username: &str, password: &str) -> reqwest::Response {
+        let login_body = serde_json::json!({
+            "username": username,
+            "password": password,
+        });
+        self.api_client
+            .post(&format!("{}/login", self.addr))
+            .form(&login_body)
+            .send()
+            .await
+            .expect("Failed to send request")
+    }
+
+    pub async fn get_change_password_html(&self) -> String {
+        self.get_change_password().await.text().await.unwrap()
+    }
+
+    pub async fn post_logout(&self) -> reqwest::Response {
+        self.api_client
+            .post(&format!("{}/admin/logout", &self.addr))
             .send()
             .await
             .expect("Failed to send request")

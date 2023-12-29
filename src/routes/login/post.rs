@@ -1,5 +1,5 @@
 use axum::{
-    response::{ErrorResponse, IntoResponse, Redirect},
+    response::{ErrorResponse, Redirect},
     Form,
 };
 use axum_flash::Flash;
@@ -7,8 +7,8 @@ use secrecy::Secret;
 use serde::Deserialize;
 
 use crate::{
-    authentication::{AuthSession, Credentials},
-    routes::error_handlers::LoginError,
+    authentication::{credentials::Credentials, middleware::AuthSession},
+    routes::error_handlers::{flash_redirect, LoginError},
 };
 
 #[derive(Deserialize)]
@@ -49,7 +49,5 @@ pub async fn login(
 }
 
 fn login_redirect(e: LoginError, flash: Flash) -> ErrorResponse {
-    (flash.error(e.to_string()), Redirect::to("/login"))
-        .into_response()
-        .into()
+    flash_redirect(&e.to_string(), "/login", flash).into()
 }

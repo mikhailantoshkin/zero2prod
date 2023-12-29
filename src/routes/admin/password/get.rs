@@ -1,7 +1,14 @@
 use axum::response::Html;
+use axum_flash::IncomingFlashes;
+use std::fmt::Write;
 
-pub async fn change_passord_form() -> Html<&'static str> {
-    Html(
+pub async fn change_passord_form(flashes: IncomingFlashes) -> Html<String> {
+    let mut msg_html = String::new();
+    for (_, msg) in flashes.iter() {
+        writeln!(msg_html, "<p><i>{}</i></p>", msg).unwrap();
+    }
+
+    Html(format!(
         r#"<!DOCTYPE html>
     <html lang="en">
     
@@ -11,6 +18,7 @@ pub async fn change_passord_form() -> Html<&'static str> {
     </head>
     
     <body>
+        {msg_html}
         <form action="/admin/password" method="post">
             <label>Current password
                 <input type="password" placeholder="Enter current password" name="current_password">
@@ -28,7 +36,6 @@ pub async fn change_passord_form() -> Html<&'static str> {
         </form>
         <p><a href="/admin/dashboard">&lt;- Back</a></p>
     </body>
-    
     </html>"#,
-    )
+    ))
 }
