@@ -35,7 +35,7 @@ use crate::{
     email_client::EmailClient,
     routes::{
         admin_dashboard, change_passord_form, change_password, health_check, home, log_out, login,
-        login_form, publish_newsletter, subscribe, subscription_confirm,
+        login_form, publish_newsletter, publish_newsletter_form, subscribe, subscription_confirm,
     },
 };
 
@@ -162,7 +162,11 @@ fn build_server(
             "/admin/password",
             get(change_passord_form).post(change_password),
         )
-        .route("/admin/logout", post(log_out));
+        .route("/admin/logout", post(log_out))
+        .route(
+            "/admin/newsletter",
+            get(publish_newsletter_form).post(publish_newsletter),
+        );
 
     let tracig_layer = TraceLayer::new_for_http().make_span_with(|req: &Request<Body>| {
                 let method = req.method();
@@ -176,7 +180,6 @@ fn build_server(
         .route("/health_check", get(health_check))
         .route("/subscriptions", post(subscribe))
         .route("/subscriptions/confirm", get(subscription_confirm))
-        .route("/newsletters", post(publish_newsletter))
         .route("/home", get(home))
         .route("/login", get(login_form).post(login))
         .merge(admin_router.route_layer(middleware::from_fn(auth_middleware)))

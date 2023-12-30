@@ -72,7 +72,10 @@ impl AuthnBackend for Backend {
 }
 
 pub async fn auth_middleware(auth_session: AuthSession, request: Request, next: Next) -> Response {
-    if auth_session.user.is_some() {
+    if let Some(user) = auth_session.user {
+        let span = tracing::Span::current();
+        span.record("username", &tracing::field::display(&user.username));
+        span.record("user_id", &tracing::field::display(&user.user_id));
         next.run(request).await
     } else {
         Redirect::to("/login").into_response()
