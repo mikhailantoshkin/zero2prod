@@ -111,10 +111,21 @@ impl TestApp {
         ConfirmationLinks { html, plain_text }
     }
 
-    pub async fn post_newsletters(&self, body: HashMap<&str, &str>) -> reqwest::Response {
+    pub async fn get_publish_newsletters_html(&self) -> String {
+        self.api_client
+            .get(&format!("{}/admin/newsletter", &self.addr))
+            .send()
+            .await
+            .expect("Unable to send request")
+            .text()
+            .await
+            .unwrap()
+    }
+
+    pub async fn post_publish_newsletters(&self, body: &HashMap<&str, &str>) -> reqwest::Response {
         self.api_client
             .post(&format!("{}/admin/newsletter", &self.addr))
-            .form(&body)
+            .form(body)
             .send()
             .await
             .expect("Unable to send request")

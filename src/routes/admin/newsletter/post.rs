@@ -1,9 +1,14 @@
 use anyhow::{anyhow, Context};
-use axum::http::StatusCode;
+use axum::response::Response;
+use axum::Extension;
 use axum::{extract::State, Form};
+use axum_flash::Flash;
 use sqlx::PgPool;
 
-use crate::routes::error_handlers::PublishError;
+use crate::authentication::credentials::User;
+use crate::idempotency::IdempotencyKey;
+use crate::idempotency::{get_seved_response, save_response};
+use crate::routes::error_handlers::{e400, e500, flash_redirect};
 use crate::{domain::SubscriberEmail, email_client::EmailClient};
 
 #[derive(serde::Deserialize)]
@@ -11,15 +16,28 @@ pub struct BodyData {
     title: String,
     html: String,
     text: String,
+    idempotency_key: String,
 }
-
-#[tracing::instrument(name = "Publish a newsletter issue", skip(body, pool, email_client))]
+#[tracing::instrument(
+    name = "Publish a newsletter issue",
+    skip(body, pool, email_client, user, flash)
+)]
 pub async fn publish_newsletter(
     State(email_client): State<EmailClient>,
     State(pool): State<PgPool>,
+    Extension(user): Extension<User>,
+    flash: Flash,
     Form(body): Form<BodyData>,
-) -> Result<StatusCode, PublishError> {
-    let subscribers = get_confirmed_subscribers(&pool).await?;
+) -> axum::response::Result<Response> {
+    let idempotency_key: IdempotencyKey = body.idempotency_key.try_into().map_err(e400)?;
+    if let Some(saved_response) = get_seved_response(&pool, &idempotency_key, user.user_id)
+        .await
+        .map_err(e500)?
+    {
+        return Ok(saved_response);
+    }
+
+    let subscribers = get_confirmed_subscribers(&pool).await.map_err(e500)?;
     for subscriber in subscribers {
         match subscriber {
             Ok(subscriber) => {
@@ -28,7 +46,8 @@ pub async fn publish_newsletter(
                     .await
                     .with_context(|| {
                         format!("Failed to send newsletter issue to {}", subscriber.email)
-                    })?;
+                    })
+                    .map_err(e500)?;
             }
             Err(error) => {
                 tracing::warn!(
@@ -39,7 +58,15 @@ pub async fn publish_newsletter(
             }
         }
     }
-    Ok(StatusCode::OK)
+    let resp = flash_redirect(
+        "The newsletter issue has been published!",
+        "/admin/newsletter",
+        flash,
+    );
+    let response = save_response(&pool, &idempotency_key, user.user_id, resp)
+        .await
+        .map_err(e500)?;
+    Ok(response)
 }
 struct ConfirmedSubscriber {
     email: SubscriberEmail,

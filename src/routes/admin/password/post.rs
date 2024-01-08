@@ -2,17 +2,14 @@ use axum::{
     extract::State,
     http::StatusCode,
     response::{ErrorResponse, IntoResponse, Response},
-    Form,
+    Extension, Form,
 };
 use axum_flash::Flash;
 use secrecy::{ExposeSecret, Secret};
 use sqlx::PgPool;
 
-use crate::authentication::{
-    credentials::{
-        change_password as change_pass, validate_credentials, validate_password, Credentials,
-    },
-    middleware::AuthSession,
+use crate::authentication::credentials::{
+    change_password as change_pass, validate_credentials, validate_password, Credentials, User,
 };
 use crate::routes::error_handlers::flash_redirect;
 
@@ -41,7 +38,7 @@ pub struct FormData {
 
 pub async fn change_password(
     State(pool): State<PgPool>,
-    session: AuthSession,
+    Extension(user): Extension<User>,
     flash: Flash,
     Form(form): Form<FormData>,
 ) -> Result<Response, ErrorResponse> {
@@ -55,7 +52,6 @@ pub async fn change_password(
         )
         .into());
     }
-    let user = session.user.as_ref().unwrap();
     let credentials = Credentials {
         username: user.username.clone(),
         password: form.current_password,

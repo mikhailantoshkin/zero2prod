@@ -25,7 +25,7 @@ impl AuthUser for User {
     }
 
     fn session_auth_hash(&self) -> &[u8] {
-        self.password_hash.expose_secret().as_bytes()
+        self.get_password_hash().expose_secret().as_bytes()
     }
 }
 
@@ -53,15 +53,14 @@ impl AuthnBackend for Backend {
         validate_credentials(creds, &self.db).await
     }
     async fn get_user(&self, user_id: &UserId<Self>) -> Result<Option<Self::User>, Self::Error> {
-        let user = sqlx::query_as!(
-            User,
+        let user = sqlx::query_as(
             r#"
         SELECT *
         FROM users
         WHERE user_id = $1
         "#,
-            user_id,
         )
+        .bind(user_id)
         .fetch_optional(&self.db)
         .await
         .context("Failed to retrieve stored creds")
@@ -71,11 +70,16 @@ impl AuthnBackend for Backend {
     }
 }
 
-pub async fn auth_middleware(auth_session: AuthSession, request: Request, next: Next) -> Response {
+pub async fn auth_middleware(
+    auth_session: AuthSession,
+    mut request: Request,
+    next: Next,
+) -> Response {
     if let Some(user) = auth_session.user {
         let span = tracing::Span::current();
         span.record("username", &tracing::field::display(&user.username));
         span.record("user_id", &tracing::field::display(&user.user_id));
+        request.extensions_mut().insert(user);
         next.run(request).await
     } else {
         Redirect::to("/login").into_response()

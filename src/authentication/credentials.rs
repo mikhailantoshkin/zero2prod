@@ -24,7 +24,13 @@ pub enum AuthError {
 pub struct User {
     pub user_id: Uuid,
     pub username: String,
-    pub password_hash: Secret<String>,
+    #[sqlx(try_from = "String")]
+    password_hash: Secret<String>,
+}
+impl User {
+    pub fn get_password_hash(&self) -> &Secret<String> {
+        &self.password_hash
+    }
 }
 
 #[derive(Clone)]

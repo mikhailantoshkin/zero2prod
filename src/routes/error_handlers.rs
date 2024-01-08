@@ -2,9 +2,11 @@ use std::fmt::Debug;
 
 use crate::authentication::credentials::AuthError;
 use crate::domain::NameValidationError;
+
 use axum::http::header;
 use axum::http::HeaderValue;
 use axum::http::StatusCode;
+use axum::response::ErrorResponse;
 use axum::response::IntoResponse;
 use axum::response::Redirect;
 use axum::response::Response;
@@ -15,6 +17,28 @@ impl IntoResponse for NameValidationError {
     fn into_response(self) -> axum::response::Response {
         (StatusCode::BAD_REQUEST, format!("{}", self)).into_response()
     }
+}
+
+pub fn e400<T>(e: T) -> ErrorResponse
+where
+    T: std::fmt::Debug + std::fmt::Display,
+{
+    Response::builder()
+        .status(StatusCode::BAD_REQUEST)
+        .body(format!("Bad request: {}", e))
+        .unwrap()
+        .into()
+}
+
+pub fn e500<T>(e: T) -> ErrorResponse
+where
+    T: std::fmt::Debug + std::fmt::Display,
+{
+    Response::builder()
+        .status(StatusCode::INTERNAL_SERVER_ERROR)
+        .body(format!("Something went wrong: {}", e))
+        .unwrap()
+        .into()
 }
 
 #[derive(thiserror::Error)]
