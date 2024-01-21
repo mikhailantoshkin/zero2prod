@@ -7,3 +7,4 @@ pub mod query;
 pub mod routes;
 pub mod startup;
 pub mod telemetry;
+pub mod issue_delivery_worker;
