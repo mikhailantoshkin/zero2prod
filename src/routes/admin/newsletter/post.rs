@@ -6,8 +6,8 @@ use axum_flash::Flash;
 use sqlx::PgPool;
 
 use crate::authentication::credentials::User;
-use crate::idempotency::IdempotencyKey;
-use crate::idempotency::{get_seved_response, save_response};
+use crate::idempotency::save_response;
+use crate::idempotency::{try_processing, IdempotencyKey, NextAction};
 use crate::routes::error_handlers::{e400, e500, flash_redirect};
 use crate::{domain::SubscriberEmail, email_client::EmailClient};
 
@@ -30,12 +30,13 @@ pub async fn publish_newsletter(
     Form(body): Form<BodyData>,
 ) -> axum::response::Result<Response> {
     let idempotency_key: IdempotencyKey = body.idempotency_key.try_into().map_err(e400)?;
-    if let Some(saved_response) = get_seved_response(&pool, &idempotency_key, user.user_id)
+    let tx = match try_processing(&pool, &idempotency_key, user.user_id)
         .await
         .map_err(e500)?
     {
-        return Ok(saved_response);
-    }
+        NextAction::StartProcessing(tx) => tx,
+        NextAction::ReturnSavedResponse(response) => return Ok(response),
+    };
 
     let subscribers = get_confirmed_subscribers(&pool).await.map_err(e500)?;
     for subscriber in subscribers {
@@ -63,7 +64,7 @@ pub async fn publish_newsletter(
         "/admin/newsletter",
         flash,
     );
-    let response = save_response(&pool, &idempotency_key, user.user_id, resp)
+    let response = save_response(tx, &idempotency_key, user.user_id, resp)
         .await
         .map_err(e500)?;
     Ok(response)
