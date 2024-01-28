@@ -48,12 +48,7 @@ pub struct Application {
 impl Application {
     pub async fn build(config: Settings) -> Result<Self, anyhow::Error> {
         let pool = get_connection_pool(&config.database).await?;
-        let email_client = EmailClient::new(
-            config.email_client.base_url,
-            config.email_client.sender_email,
-            config.email_client.authorization_token,
-            config.email_client.timeout_millis,
-        );
+        let email_client = config.email_client.client();
         let addr = format!("{}:{}", config.app.host, config.app.port);
         let listener = TcpListener::bind(addr)
             .await

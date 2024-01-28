@@ -1,0 +1,1 @@
+ALTER TABLE issue_delivery_queue ADD COLUMN next_retry timestamptz NOT NULL DEFAULT now();

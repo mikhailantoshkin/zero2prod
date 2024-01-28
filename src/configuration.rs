@@ -8,7 +8,7 @@ use sqlx::{
     ConnectOptions,
 };
 
-use crate::domain::SubscriberEmail;
+use crate::{domain::SubscriberEmail, email_client::EmailClient};
 
 #[derive(Deserialize, Clone)]
 pub struct Settings {
@@ -35,6 +35,17 @@ pub struct EmailClientSettings {
     pub authorization_token: Secret<String>,
     #[serde(deserialize_with = "deserialize_duration_from_millis")]
     pub timeout_millis: Duration,
+}
+
+impl EmailClientSettings {
+    pub fn client(self) -> EmailClient {
+        EmailClient::new(
+            self.base_url,
+            self.sender_email,
+            self.authorization_token,
+            self.timeout_millis,
+        )
+    }
 }
 
 #[derive(Deserialize, Clone)]

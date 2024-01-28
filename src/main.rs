@@ -34,7 +34,7 @@ fn report_exit(task_name: &str, outcome: Result<Result<(), impl Debug + Display>
                 "{} failed",
                 task_name
             )
-        }   
+        }
         Err(e) => {
             tracing::error!(
                 error.cause_chain = ?e,

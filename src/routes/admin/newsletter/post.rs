@@ -1,4 +1,4 @@
-use anyhow::{anyhow, Context};
+use anyhow::Context;
 use axum::response::Response;
 use axum::Extension;
 use axum::{extract::State, Form};
@@ -10,7 +10,6 @@ use crate::authentication::credentials::User;
 use crate::idempotency::save_response;
 use crate::idempotency::{try_processing, IdempotencyKey, NextAction};
 use crate::routes::error_handlers::{e400, e500, flash_redirect};
-use crate::{domain::SubscriberEmail, email_client::EmailClient};
 
 #[derive(serde::Deserialize)]
 pub struct BodyData {

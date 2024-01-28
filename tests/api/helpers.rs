@@ -1,5 +1,7 @@
 use argon2::password_hash::SaltString;
 use argon2::{Algorithm, Argon2, Params, PasswordHasher, Version};
+use zero2prod::email_client::EmailClient;
+use zero2prod::issue_delivery_worker::{try_execute_taks, ExecutionOutcome};
 
 use std::collections::HashMap;
 use std::time::Duration;
@@ -77,9 +79,19 @@ pub struct TestApp {
     pub port: u16,
     pub test_user: TestUser,
     pub api_client: reqwest::Client,
+    pub email_client: EmailClient,
 }
 
 impl TestApp {
+    pub async fn dispatch_all_pending_emails(&self) {
+        loop {
+            if let Ok(ExecutionOutcome::EmptyQueue) =
+                try_execute_taks(&self.pool, &self.email_client).await
+            {
+                break;
+            }
+        }
+    }
     pub async fn post_subscription(&self, body: String) -> reqwest::Response {
         self.api_client
             .post(format!("{}/subscriptions", self.addr))
@@ -265,6 +277,7 @@ pub async fn spawn_app() -> TestApp {
         email_server: mock_server,
         test_user: TestUser::generate(),
         api_client: client,
+        email_client: configuration.email_client.client(),
     };
     test_app.test_user.store(&test_app.pool).await;
     test_app
